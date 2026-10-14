@@ -8,6 +8,7 @@ import { Controls } from './ui/controls';
 import { $, clear, h } from './ui/dom';
 import { formatBitrate, formatTime } from './ui/format';
 import { icons } from './ui/icons';
+import { installSplitter } from './ui/splitter';
 
 const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
@@ -109,6 +110,7 @@ const overlay = {
     return this.visible;
   },
 };
+installSplitter($('.layout'), $('#splitter'));
 const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'));
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e));
 

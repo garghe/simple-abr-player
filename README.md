@@ -39,6 +39,7 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 | **Stats: Manifest** | The raw MPD and every HLS playlist exactly as fetched (refreshes for live streams), with SCTE and ad-related lines highlighted. |
 | **Stats: Device** | Codec support (Media Source Extensions plus a 1080p smoothness check), DRM support and security levels (Widevine, PlayReady, FairPlay, ClearKey), HDCP version, HDR display and colour range. |
 | **Stats: Log** | Loading steps, quality switches, track changes, stalls and errors. |
+| **Resizable layout** | Drag the handle between the player and the stats panel: drag left for a wider stats panel and a smaller player, right for the opposite. The width is remembered. Double-click the handle to reset; with the handle focused, arrow keys also resize it. |
 | **Stats overlay** | A compact YouTube-style "stats for nerds" box on top of the video (press `i`). |
 | **Export** | Downloads a JSON file with the stats, tracks, SCTE log, network log and event log, useful to attach to a bug report. |
 | **CORS proxy** | Built into the local dev and preview servers, so plain HTTPS streams play even when their server doesn't allow browser access (see below). |
@@ -213,6 +214,7 @@ flowchart LR
 | `src/scte/monitor.ts` | Merges markers from all sources, removes duplicates, fills in timings that arrive later, and works out whether an ad break is active. |
 | `src/ui/controls.ts`, `seekbar.ts` | Control bar, track selectors, keyboard shortcuts, and the seek bar with buffered regions and SCTE markers and breaks. |
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
+| `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
 | `src/ui/chart.ts` | Small canvas line chart for bandwidth and buffer. |
 | `src/settings.ts`, `src/presets.ts` | Saved settings and URL history (in browser storage, with safe fallbacks), and the list of test streams. |
 

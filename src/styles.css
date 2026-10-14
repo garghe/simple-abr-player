@@ -206,11 +206,49 @@ textarea {
 /* ------------------------------------------------------------------ layout */
 
 .layout {
+  --stats-width: 460px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 520px);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 20px var(--stats-width);
   padding: 20px;
   align-items: start;
+}
+
+/* Drag handle between the player and the stats panel. */
+.splitter {
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+  outline: none;
+}
+
+.splitter::before {
+  content: '';
+  position: sticky;
+  top: calc(50vh - 24px);
+  display: block;
+  width: 4px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+
+.splitter:hover::before,
+.splitter:focus-visible::before,
+.splitter.dragging::before {
+  background: var(--accent);
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Keep the video from swallowing pointer events mid-drag. */
+body.resizing .player {
+  pointer-events: none;
 }
 
 .player-col {
@@ -232,7 +270,11 @@ textarea {
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
     padding: 16px;
+  }
+  .splitter {
+    display: none;
   }
   .stats-col {
     position: static;
