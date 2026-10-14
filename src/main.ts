@@ -9,6 +9,7 @@ import { $, clear, h } from './ui/dom';
 import { formatBitrate, formatTime } from './ui/format';
 import { icons } from './ui/icons';
 import { installSplitter } from './ui/splitter';
+import { installThemeToggle } from './ui/theme';
 
 const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
@@ -111,6 +112,8 @@ const overlay = {
   },
 };
 installSplitter($('.layout'), $('#splitter'));
+// Redraw canvas-based views (the chart) in the new colours.
+installThemeToggle($('#theme-btn') as HTMLButtonElement, () => ctrl.dispatchEvent(new CustomEvent('tick')));
 const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'));
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e));
 

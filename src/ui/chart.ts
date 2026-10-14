@@ -11,9 +11,9 @@ interface Series {
 }
 
 const SERIES: Series[] = [
-  { label: 'Estimated bandwidth', color: '#60a5fa', value: (s) => s.estimatedBandwidth, format: formatBitrate },
-  { label: 'Stream bitrate', color: '#f472b6', value: (s) => s.streamBandwidth, format: formatBitrate },
-  { label: 'Buffer ahead', color: '#34d399', value: (s) => s.bufferAhead, format: (v) => `${v.toFixed(1)}s`, secondary: true },
+  { label: 'Estimated bandwidth', color: '#3b82f6', value: (s) => s.estimatedBandwidth, format: formatBitrate },
+  { label: 'Stream bitrate', color: '#db2777', value: (s) => s.streamBandwidth, format: formatBitrate },
+  { label: 'Buffer ahead', color: '#10b981', value: (s) => s.bufferAhead, format: (v) => `${v.toFixed(1)}s`, secondary: true },
 ];
 
 /** Small dependency-free line chart for the last few minutes of samples. */
@@ -33,7 +33,11 @@ export function drawChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
   const plotW = w - pad.l - pad.r;
   const plotH = hgt - pad.t - pad.b;
 
-  ctx.strokeStyle = 'rgba(148,163,184,0.15)';
+  // Colours follow the active theme (CSS custom properties).
+  const css = getComputedStyle(canvas);
+  const grid = css.getPropertyValue('--chart-grid').trim() || 'rgba(148,163,184,0.15)';
+  const labelColor = css.getPropertyValue('--chart-text').trim() || '#cbd5e1';
+  ctx.strokeStyle = grid;
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = pad.t + (plotH * i) / 4;
@@ -68,7 +72,7 @@ export function drawChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
     const text = `${series.label}: ${last ? series.format(series.value(last)) : '—'}`;
     ctx.fillStyle = series.color;
     ctx.fillRect(legendX, 7, 8, 8);
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = labelColor;
     ctx.fillText(text, legendX + 12, 15);
     legendX += ctx.measureText(text).width + 24;
   }

@@ -117,7 +117,21 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await page.close();
 }
 
-// 5. Phone layout.
+// 5. Light theme.
+{
+  const page = await open(DASH_SAMPLE);
+  await page.waitForTimeout(1500);
+  await seek(page, 19);
+  await page.waitForTimeout(3000);
+  await page.click('#theme-btn'); // System -> Light
+  await tab(page, 'SCTE-35');
+  await showControls(page);
+  await page.waitForTimeout(600);
+  await shot(page, 'light.png');
+  await page.close();
+}
+
+// 6. Phone layout.
 {
   const page = await open(DASH_SAMPLE, { width: 390, height: 844 });
   await page.waitForTimeout(1500);

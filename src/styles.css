@@ -12,12 +12,121 @@
   --danger: #f87171;
   --ad: #f59e0b;
   --live: #ef4444;
+  --border-hover: #3a4a6b;
+  --row-line: var(--row-line);
+  --code-bg: #0a0e16;
+  --badge-bg: #1f2a40;
+  --badge-text: #cbd5e1;
+  --ok-bg: rgba(52, 211, 153, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --accent-bg: rgba(59, 130, 246, 0.2);
+  --live-bg: rgba(239, 68, 68, 0.2);
+  --live-text: #fca5a5;
+  --ad-bg: rgba(245, 158, 11, 0.2);
+  --ad-text: var(--ad);
+  --info-bg: rgba(167, 139, 250, 0.18);
+  --info-text: #c4b5fd;
+  --hl-bg: rgba(245, 158, 11, 0.18);
+  --hl-text: #fde68a;
+  --break-bg: rgba(245, 158, 11, 0.1);
+  --chart-grid: rgba(148, 163, 184, 0.15);
+  --chart-text: #cbd5e1;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   --radius: 10px;
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
+  color-scheme: dark;
+}
+
+/* Light theme: chosen explicitly, or by the OS when the toggle is on "System". */
+:root[data-theme='light'] {
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-2: #eef2f7;
+  --border: #d5dce6;
+  --border-hover: #aab6c8;
+  --text: #0f172a;
+  --muted: #5b6577;
+  --accent: #2563eb;
+  --accent-2: #1d4ed8;
+  --ok: #047857;
+  --warn: #b45309;
+  --danger: #dc2626;
+  --ad: #d97706;
+  --row-line: #e6eaf0;
+  --code-bg: #f8fafc;
+  --badge-bg: #e8edf4;
+  --badge-text: #334155;
+  --ok-bg: #d1fae5;
+  --danger-bg: #fee2e2;
+  --accent-bg: #dbeafe;
+  --live-bg: #fee2e2;
+  --live-text: #b91c1c;
+  --ad-bg: #fef3c7;
+  --ad-text: #92400e;
+  --info-bg: #ede9fe;
+  --info-text: #6d28d9;
+  --hl-bg: #fef3c7;
+  --hl-text: #78350f;
+  --break-bg: #fffbeb;
+  --chart-grid: rgba(100, 116, 139, 0.18);
+  --chart-text: #334155;
+  --shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f4f6fa;
+    --panel: #ffffff;
+    --panel-2: #eef2f7;
+    --border: #d5dce6;
+    --border-hover: #aab6c8;
+    --text: #0f172a;
+    --muted: #5b6577;
+    --accent: #2563eb;
+    --accent-2: #1d4ed8;
+    --ok: #047857;
+    --warn: #b45309;
+    --danger: #dc2626;
+    --ad: #d97706;
+    --row-line: #e6eaf0;
+    --code-bg: #f8fafc;
+    --badge-bg: #e8edf4;
+    --badge-text: #334155;
+    --ok-bg: #d1fae5;
+    --danger-bg: #fee2e2;
+    --accent-bg: #dbeafe;
+    --live-bg: #fee2e2;
+    --live-text: #b91c1c;
+    --ad-bg: #fef3c7;
+    --ad-text: #92400e;
+    --info-bg: #ede9fe;
+    --info-text: #6d28d9;
+    --hl-bg: #fef3c7;
+    --hl-text: #78350f;
+    --break-bg: #fffbeb;
+    --chart-grid: rgba(100, 116, 139, 0.18);
+    --chart-text: #334155;
+    --shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    color-scheme: light;
+  }
+}
+
+/* The picture area stays dark in every theme, like any video player. */
+.player {
+  --accent: #3b82f6;
+  --accent-2: #60a5fa;
+  --ok: #34d399;
+  --ad: #f59e0b;
+  --muted: #94a3b8;
+  --text: #e5e7eb;
+  --danger: #f87171;
+  color: var(--text);
+  color-scheme: dark;
 }
 
 * {
@@ -55,7 +164,7 @@ textarea {
 
 button:hover:not(:disabled),
 select:hover:not(:disabled) {
-  border-color: #3a4a6b;
+  border-color: var(--border-hover);
 }
 
 :focus-visible {
@@ -777,11 +886,11 @@ body.resizing .player {
 
 .tabs {
   display: flex;
-  gap: 2px;
-  padding: 0 10px;
+  gap: 0;
+  padding: 0 8px;
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
+  /* Wrap rather than hide tabs when the panel is narrow (see splitter). */
+  flex-wrap: wrap;
 }
 
 .tab {
@@ -789,7 +898,7 @@ body.resizing .player {
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 8px 7px;
+  padding: 8px 6px;
   font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
@@ -862,7 +971,7 @@ table.kv td {
 }
 
 table.kv tr + tr {
-  border-top: 1px solid rgba(36, 48, 73, 0.6);
+  border-top: 1px solid var(--row-line);
 }
 
 table.grid th {
@@ -877,7 +986,7 @@ table.grid th {
 
 table.grid td {
   padding: 5px 6px;
-  border-bottom: 1px solid rgba(36, 48, 73, 0.6);
+  border-bottom: 1px solid var(--row-line);
   vertical-align: top;
 }
 
@@ -904,44 +1013,44 @@ table.grid td.empty {
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 10px;
-  background: #1f2a40;
-  color: #cbd5e1;
+  background: var(--badge-bg);
+  color: var(--badge-text);
   white-space: nowrap;
 }
 
 .badge.ok {
-  background: rgba(52, 211, 153, 0.15);
+  background: var(--ok-bg);
   color: var(--ok);
 }
 
 .badge.warn {
-  background: rgba(248, 113, 113, 0.15);
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
 .badge.accent {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--accent-bg);
   color: var(--accent-2);
 }
 
 .badge.live {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  background: var(--live-bg);
+  color: var(--live-text);
 }
 
 .badge.out {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--ad);
+  background: var(--ad-bg);
+  color: var(--ad-text);
 }
 
 .badge.in {
-  background: rgba(52, 211, 153, 0.15);
+  background: var(--ok-bg);
   color: var(--ok);
 }
 
 .badge.other {
-  background: rgba(167, 139, 250, 0.18);
-  color: #c4b5fd;
+  background: var(--info-bg);
+  color: var(--info-text);
 }
 
 .chart-wrap {
@@ -978,7 +1087,7 @@ table.grid td.empty {
 }
 
 pre.code {
-  background: #0a0e16;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
@@ -1002,8 +1111,8 @@ pre .line {
 }
 
 pre .hl {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fde68a;
+  background: var(--hl-bg);
+  color: var(--hl-text);
 }
 
 .scte-status .break-state {
@@ -1016,7 +1125,7 @@ pre .hl {
 
 .scte-status .break-state.in-break {
   border-left-color: var(--ad);
-  background: rgba(245, 158, 11, 0.1);
+  background: var(--break-bg);
 }
 
 .linklike {
@@ -1063,7 +1172,7 @@ pre .hl {
 
 .log li {
   padding: 4px 0;
-  border-bottom: 1px solid rgba(36, 48, 73, 0.6);
+  border-bottom: 1px solid var(--row-line);
 }
 
 .log li.warn {
@@ -1083,7 +1192,7 @@ pre .hl {
   border: 1px solid var(--border);
   padding: 9px 16px;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
   z-index: 50;
 }
 
@@ -1127,4 +1236,24 @@ pre .hl {
 
 .network-table td:not(:last-child) {
   white-space: nowrap;
+}
+
+/* Theme toggle in the header. */
+.theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.theme-btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .theme-btn span {
+    display: none;
+  }
 }
