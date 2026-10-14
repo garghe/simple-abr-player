@@ -1,0 +1,25 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.000
+Contenuto del programma
+
+2
+00:00:06.000 --> 00:00:14.000
+Pausa pubblicitaria 1: splice_insert OUT
+
+3
+00:00:14.000 --> 00:00:20.000
+Ritorno al programma (splice_insert IN)
+
+4
+00:00:20.000 --> 00:00:26.000
+Pausa pubblicitaria 2: time_signal (emsg)
+
+5
+00:00:26.000 --> 00:00:36.000
+Ritorno al programma
+
+6
+00:00:36.000 --> 00:00:39.500
+Fine della demo

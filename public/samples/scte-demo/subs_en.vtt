@@ -1,0 +1,25 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.000
+Programme content
+
+2
+00:00:06.000 --> 00:00:14.000
+Ad break 1: splice_insert OUT (DASH EventStream / HLS DATERANGE + CUE-OUT)
+
+3
+00:00:14.000 --> 00:00:20.000
+Back to the programme (splice_insert IN / CUE-IN)
+
+4
+00:00:20.000 --> 00:00:26.000
+Ad break 2: time_signal, Provider Placement Opportunity (in-band emsg)
+
+5
+00:00:26.000 --> 00:00:36.000
+Back to the programme
+
+6
+00:00:36.000 --> 00:00:39.500
+End of the demo

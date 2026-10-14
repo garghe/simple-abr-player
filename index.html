@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Simple ABR Player</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b82f6'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <span>Simple ABR Player</span>
+        <span class="tagline">DASH · HLS · SCTE-35</span>
+      </div>
+      <form id="load-form" class="load-form" autocomplete="off">
+        <input id="url" type="url" list="url-history" required placeholder="Paste an MPEG-DASH (.mpd) or HLS (.m3u8) URL" aria-label="Stream URL" />
+        <datalist id="url-history"></datalist>
+        <select id="presets" aria-label="Test streams"></select>
+        <button type="submit" class="primary" id="load-btn">Load</button>
+        <button type="button" id="settings-btn" class="icon-btn" title="Load settings" aria-label="Load settings" aria-expanded="false"></button>
+      </form>
+    </header>
+
+    <section id="settings" class="settings" hidden>
+      <div class="field">
+        <label for="proxy-mode">CORS proxy</label>
+        <select id="proxy-mode">
+          <option value="auto">Auto — retry through the local proxy on network/CORS errors</option>
+          <option value="always">Always — send every request through the local proxy</option>
+          <option value="off">Off — fetch directly from the browser</option>
+        </select>
+        <small id="proxy-status"></small>
+      </div>
+      <div class="field">
+        <label for="headers">Custom request headers <small>(one per line, <code>Name: value</code>)</small></label>
+        <textarea id="headers" rows="3" placeholder="Authorization: Bearer …&#10;X-Custom: value"></textarea>
+      </div>
+      <div class="field checks">
+        <label><input type="checkbox" id="low-latency" /> Low-latency mode (LL-HLS / LL-DASH)</label>
+        <label><input type="checkbox" id="autoplay" /> Autoplay after load</label>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="player-col">
+        <div id="player" class="player" tabindex="-1">
+          <video id="video" playsinline></video>
+          <div id="ad-banner" class="ad-banner" hidden></div>
+          <div id="nerd-overlay" class="nerd-overlay" hidden></div>
+          <div id="player-message" class="player-message">
+            <div>
+              <strong>Load a stream to start</strong>
+              <p>Paste a DASH or HLS URL above, or pick one of the test streams.</p>
+            </div>
+          </div>
+          <div id="spinner" class="spinner" hidden></div>
+          <div id="controls" class="controls"></div>
+        </div>
+        <div id="stream-summary" class="stream-summary"></div>
+      </section>
+
+      <aside class="stats-col">
+        <div class="stats-head">
+          <h2>Stats for nerds</h2>
+          <div class="stats-actions">
+            <button type="button" id="share-btn" title="Copy a link that loads this stream">Copy link</button>
+            <button type="button" id="export-btn" title="Download stats, tracks, SCTE log and network log as JSON">Export JSON</button>
+          </div>
+        </div>
+        <nav id="tabs" class="tabs" role="tablist"></nav>
+        <div id="tab-body" class="tab-body"></div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
