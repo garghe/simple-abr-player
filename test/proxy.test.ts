@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fromProxyUrl, isProxied, toProxyUrl } from '../src/player/proxy';
-import { parseProxyPath } from '../server/proxy-plugin';
+import { isHostAllowed, parseProxyPath } from '../server/proxy-shared';
 
 const ORIGIN = 'http://localhost:5173';
 
@@ -29,5 +29,20 @@ describe('proxy URL mapping', () => {
     expect(parseProxyPath('/__proxy/https/example.com/x.mpd?a=1')?.toString()).toBe('https://example.com/x.mpd?a=1');
     expect(parseProxyPath('/__proxy/ftp/example.com/x')).toBeNull();
     expect(parseProxyPath('/other')).toBeNull();
+  });
+});
+
+describe('isHostAllowed', () => {
+  it('allows everything when the list is empty', () => {
+    expect(isHostAllowed('any.example.com', [])).toBe(true);
+  });
+  it('matches exact hosts and *.wildcards', () => {
+    const list = ['cdn.example.com', '*.akamaized.net'];
+    expect(isHostAllowed('cdn.example.com', list)).toBe(true);
+    expect(isHostAllowed('CDN.example.com', list)).toBe(true);
+    expect(isHostAllowed('a.b.akamaized.net', list)).toBe(true);
+    expect(isHostAllowed('akamaized.net', list)).toBe(true);
+    expect(isHostAllowed('evil-akamaized.net', list)).toBe(false);
+    expect(isHostAllowed('other.example.com', list)).toBe(false);
   });
 });

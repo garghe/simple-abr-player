@@ -1,0 +1,21 @@
+// Cloudflare Workers configuration — see README "Deploy to Cloudflare Workers".
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "simple-abr-player",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  // The Vite build output. Files are served directly; only requests that
+  // match no file (e.g. /__proxy/...) reach worker/index.ts.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    // Set to "true" to enable the CORS proxy on the deployed site.
+    "PROXY_ENABLED": "false",
+    // Comma-separated hosts the proxy may fetch, e.g. "*.akamaized.net,cdn.example.com".
+    // Empty = any host: only do that with "Protect with Cloudflare Access" turned on.
+    "PROXY_ALLOWED_HOSTS": ""
+  },
+  "observability": { "enabled": true }
+}

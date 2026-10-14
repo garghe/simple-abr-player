@@ -14,6 +14,7 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 - [Quick start](#quick-start)
 - [Playing HTTPS streams locally (CORS proxy)](#playing-https-streams-locally-cors-proxy)
 - [Build and run in production](#build-and-run-in-production)
+- [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Screenshots](#screenshots)
 - [SCTE-35 support](#scte-35-support)
 - [Architecture](#architecture)
@@ -76,6 +77,7 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm test` | Runs the unit tests (Vitest). |
 | `npm run typecheck` | Checks TypeScript types only. |
 | `npm run sample` | Regenerates the bundled SCTE-35 sample (needs `ffmpeg`). |
+| `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
 | `npm run screenshots` | Regenerates the README screenshots (needs Playwright's Chromium). |
 
 ---
@@ -108,7 +110,7 @@ Other details:
 - **Redirects** are followed, and byte-range requests work (needed for single-file DASH streams).
 - **Security:** the proxy is for **local use only**. Vite listens only on `localhost` by default. Don't run it with `--host` on a shared network, because anyone who can reach it could use it to fetch URLs from your machine.
 
-> A static deployment (for example GitHub Pages) has **no proxy**, so streams must allow browser access (CORS). A site served over `https://` also can't load `http://` streams (the browser blocks mixed content). In both cases, run the app locally.
+> A plain static deployment (for example GitHub Pages) has **no proxy**, so streams must allow browser access (CORS). The [Cloudflare Workers deployment](#deploy-to-cloudflare-workers) can run the same proxy online if you switch it on. A site served over `https://` also can't load `http://` streams (the browser blocks mixed content), unless they go through the proxy.
 
 ---
 
@@ -119,7 +121,68 @@ npm run build      # → dist/
 npm run preview    # serves dist/ on http://localhost:4173, with the CORS proxy
 ```
 
-`dist/` is a fully static site with relative paths (`base: './'`), so you can host it from any web server, bucket or sub-folder: GitHub Pages, S3 + CloudFront, nginx, and so on. Remember the static version has no CORS proxy (see above).
+`dist/` is a fully static site with relative paths (`base: './'`), so you can host it from any web server, bucket or sub-folder: GitHub Pages, S3 + CloudFront, nginx, and so on. A plain static host has no CORS proxy (see above). For a hosted version *with* the proxy, use Cloudflare Workers (next section).
+
+---
+
+## Deploy to Cloudflare Workers
+
+The repo is ready for [Cloudflare Workers](https://developers.cloudflare.com/workers/). Workers serves the built site (`dist/`) as static files, and a small Worker script (`worker/index.ts`) can also run the CORS proxy online. Configuration lives in [`wrangler.jsonc`](wrangler.jsonc).
+
+### Option A: connect the GitHub repo (recommended)
+
+In the Cloudflare dashboard go to **Workers & Pages → Create → Import a repository**, choose **garghe/simple-abr-player** and fill in the form:
+
+| Field | Value |
+| --- | --- |
+| Repository | `garghe/simple-abr-player` |
+| Project name | `simple-abr-player` (must match `"name"` in `wrangler.jsonc`) |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Preview command | `npx wrangler preview` |
+| Enable Preview builds | **On**: each non-production branch or pull request gets its own preview URL |
+| Protect with Cloudflare Access | **Off** for a public player. Turn it **on** if you enable the proxy without a host allowlist (see below). |
+
+Under **Advanced settings → Build variables**, nothing is required. The build uses Node 22 from `.nvmrc`. If your build image ignores `.nvmrc`, add `NODE_VERSION` = `22`.
+
+**Production branch:** Cloudflare deploys the repository's default branch, currently `claude/brave-brown-gye24p` (the only branch). After you merge into `main`, change it in **Settings → Build → Branch control**.
+
+Press **Deploy**. The app will be available at `https://simple-abr-player.<your-subdomain>.workers.dev`. Every push to the production branch redeploys it automatically.
+
+### Option B: deploy from your computer
+
+```bash
+npx wrangler login     # once, opens the browser
+npm run deploy         # = npm run build && wrangler deploy
+```
+
+### Turning on the CORS proxy online (optional)
+
+The proxy is **off by default** on Cloudflare: a public, open proxy could be used by anyone to fetch anything through your account. With it off, the app works but streams must allow browser access (CORS). The app detects this and does not offer the proxy.
+
+To turn it on, set these variables in **Worker → Settings → Variables and Secrets** (or in `wrangler.jsonc` under `"vars"`), then redeploy:
+
+| Variable | Value | Meaning |
+| --- | --- | --- |
+| `PROXY_ENABLED` | `true` | Turns `/__proxy/…` on. |
+| `PROXY_ALLOWED_HOSTS` | e.g. `*.akamaized.net,cdn.example.com` | Comma-separated origin hosts the proxy may fetch (`*.` matches subdomains). **Strongly recommended.** Other hosts get `403`. Empty means any host, so only leave it empty with **Protect with Cloudflare Access** turned on, so that only people you allow can use the site. |
+
+> **Note:** variables set in the dashboard are overwritten by the values in `wrangler.jsonc` on the next deploy from Git. To keep dashboard values, either edit `wrangler.jsonc` in the repo (recommended), or remove the `"vars"` block.
+
+Things to know when the proxy is on:
+
+- Every manifest and segment request then passes through the Worker, so it counts towards your [Workers request limits](https://developers.cloudflare.com/workers/platform/limits/). The free plan allows 100,000 requests per day, which a few hours of segment-by-segment playback can use up. Prefer **Auto** mode in the app, which only uses the proxy when a direct request fails.
+- The Worker fetches from Cloudflare's network, not your office network, so origins that are only reachable internally (VPN or private IPs) still need the local `npm run dev` proxy.
+
+### Checking a deployment
+
+| URL | Expected |
+| --- | --- |
+| `https://<your-worker>/` | The player |
+| `https://<your-worker>/samples/scte-demo/dash.mpd` | The bundled sample MPD |
+| `https://<your-worker>/__proxy/health` | `ok` when the proxy is on; `404 disabled` when off |
+
+To try the Worker locally with the same runtime Cloudflare uses: `npm run build && npx wrangler dev`. Add `--var PROXY_ENABLED:true` to test the proxy.
 
 ---
 
@@ -190,8 +253,8 @@ flowchart LR
     SHAKA["Shaka Player<br/>(MSE playback, ABR, text)"]
     VIDEO[("video element")]
   end
-  subgraph "Vite dev / preview server (Node)"
-    PROXY["CORS proxy<br/>server/proxy-plugin.ts"]
+  subgraph "Vite dev server (local) or Cloudflare Worker (deployed)"
+    PROXY["CORS proxy<br/>server/proxy-plugin.ts · worker/index.ts"]
   end
   CDN[("Origin / CDN")]
 
@@ -212,6 +275,8 @@ flowchart LR
 | --- | --- |
 | `src/player/controller.ts` | **The only code that talks to Shaka Player.** Loads streams (including the automatic retry through the proxy), applies custom headers and proxy rewriting to every request, keeps the network log and fetched manifests, collects SCTE events, converts HLS marker times to player times, samples the stats every second, and keeps the event log. Notifies the UI through simple events (`tick`, `tracks`, `scte`, `network`, `documents`, `log`, `loaded`, `error`). |
 | `src/player/proxy.ts` | Converts URLs to and from their proxied form, and checks whether the proxy is available. |
+| `server/proxy-shared.ts` | Proxy rules shared by the local server and the Worker: URL mapping, which headers are passed through, CORS headers, redirect rewriting, host allowlist. |
+| `worker/index.ts` | Cloudflare Worker: serves the built site and, when `PROXY_ENABLED` is `true`, runs the CORS proxy (limited to `PROXY_ALLOWED_HOSTS`). |
 | `server/proxy-plugin.ts` | Adds the CORS proxy to the Vite dev and preview servers. Passes ranges, headers and redirects through, and follows the HTTPS proxy settings. |
 | `src/scte/scte35.ts` | SCTE-35 decoder, CRC check, summaries, and out/in and duration helpers. No dependencies; unit-tested against published sample messages. |
 | `src/scte/hls-cues.ts` | Finds ad-marker tags in HLS playlists and links each one to its segment, timestamp and position. |
@@ -256,7 +321,11 @@ sequenceDiagram
 ```
 ├── index.html                 Page layout (header, settings, player, stats panel)
 ├── vite.config.ts             Vite + CORS proxy plugin + Vitest config
+├── wrangler.jsonc             Cloudflare Workers config (assets, proxy variables)
+├── worker/
+│   └── index.ts               Cloudflare Worker: static site + optional CORS proxy
 ├── server/
+│   ├── proxy-shared.ts        Proxy logic shared by Vite plugin and Worker
 │   └── proxy-plugin.ts        Local CORS proxy (dev + preview)
 ├── src/
 │   ├── main.ts                Connects everything: load, settings, overlay, export, share
@@ -290,7 +359,8 @@ The unit tests cover:
 - **SCTE-35 decoding** against published sample messages (`time_signal` with a Placement Opportunity Start; `splice_insert` with a break duration and avail descriptor), round trips with the encoder, CRC checks, and invalid input.
 - **HLS tag parsing**: attribute lists, DATERANGE, CUE-OUT/CONT/IN and OATCLS, segment and timestamp linking, VOD vs live.
 - **Marker monitor**: duplicate removal across playlists and refreshes, active-break detection, and joining a live stream mid-break.
-- **Proxy URL conversion**: round trips, relative URLs, and how the server reads the target URL.
+- **Proxy URL conversion**: round trips, relative URLs, how the server reads the target URL, and the host allowlist.
+- **Cloudflare Worker**: static files passed through, proxy off by default, health check, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
 
@@ -334,6 +404,8 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | `6001` / `6007` (DRM) | The stream is encrypted. DRM comes in the next iteration. |
 | Nothing plays from a deployed `https://` site | The stream is `http://` (blocked as mixed content) or doesn't allow browser access. Run locally with `npm run dev`. |
 | Proxy can't reach the origin behind a corporate proxy | Set `HTTPS_PROXY` (and `NODE_EXTRA_CA_CERTS` if your company inspects HTTPS) before `npm run dev`. |
+| On Cloudflare, a stream fails with a CORS error and the app doesn't offer the proxy | The proxy is off on the Worker. Set `PROXY_ENABLED=true` (and `PROXY_ALLOWED_HOSTS`), then redeploy. Check with `/__proxy/health`. |
+| Proxy returns `403 … not in PROXY_ALLOWED_HOSTS` | Add the origin's host (or `*.domain`) to `PROXY_ALLOWED_HOSTS`. |
 | `npm run screenshots` can't find a browser | Run `npx playwright install chromium`, or set `CHROMIUM_PATH` to a Chrome or Chromium executable. |
 
 ---

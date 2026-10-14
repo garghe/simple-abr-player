@@ -2,6 +2,17 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 import type { Connect, Plugin } from 'vite';
 import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
+import {
+  CORS_HEADERS,
+  CUSTOM_HEADER_PREFIX,
+  FORWARD_REQUEST_HEADERS,
+  FORWARD_RESPONSE_HEADERS,
+  PREFIX,
+  parseProxyPath,
+  proxiedLocation,
+} from './proxy-shared.ts';
+
+export { parseProxyPath };
 
 /**
  * Local CORS proxy for the Vite dev and preview servers.
@@ -21,31 +32,6 @@ import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
  * expose it on a public interface.
  */
 
-const PREFIX = '/__proxy/';
-
-const FORWARD_REQUEST_HEADERS = [
-  'range',
-  'accept',
-  'accept-language',
-  'authorization',
-  'cookie',
-  'if-none-match',
-  'if-modified-since',
-  'user-agent',
-];
-
-const FORWARD_RESPONSE_HEADERS = [
-  'content-type',
-  'content-length',
-  'content-range',
-  'accept-ranges',
-  'cache-control',
-  'etag',
-  'last-modified',
-  'date',
-  'age',
-];
-
 const hasProxyEnv = () =>
   Boolean(
     process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy,
@@ -58,26 +44,8 @@ const getDispatcher = () => {
   return dispatcher;
 };
 
-export function parseProxyPath(path: string): URL | null {
-  if (!path.startsWith(PREFIX)) return null;
-  const rest = path.slice(PREFIX.length);
-  const m = rest.match(/^(https?)\/(.+)$/i);
-  if (!m) return null;
-  try {
-    return new URL(`${m[1].toLowerCase()}://${m[2]}`);
-  } catch {
-    return null;
-  }
-}
-
 function setCors(res: ServerResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  res.setHeader(
-    'Access-Control-Expose-Headers',
-    'Content-Length, Content-Range, Content-Type, Date, Age, X-Proxy-Target, X-Proxy-Status',
-  );
+  for (const [k, v] of Object.entries(CORS_HEADERS)) res.setHeader(k, v);
 }
 
 async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) {
@@ -112,8 +80,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.N
   }
   // Custom headers set in the UI arrive as X-Proxy-Header-<Name>.
   for (const [name, v] of Object.entries(req.headers)) {
-    if (name.startsWith('x-proxy-header-') && typeof v === 'string') {
-      headers[name.slice('x-proxy-header-'.length)] = v;
+    if (name.startsWith(CUSTOM_HEADER_PREFIX) && typeof v === 'string') {
+      headers[name.slice(CUSTOM_HEADER_PREFIX.length)] = v;
     }
   }
 
@@ -136,9 +104,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.N
 
     const location = upstream.headers.get('location');
     if (upstream.status >= 300 && upstream.status < 400 && location) {
-      const next = new URL(location, target);
       res.statusCode = upstream.status;
-      res.setHeader('Location', `${PREFIX}${next.protocol.replace(':', '')}/${next.host}${next.pathname}${next.search}`);
+      res.setHeader('Location', proxiedLocation(location, target));
       return res.end();
     }
 
