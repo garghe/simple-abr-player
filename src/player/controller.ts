@@ -1,7 +1,7 @@
 import shaka from 'shaka-player';
 import { parseHlsCues, type HlsCue } from '../scte/hls-cues';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
-import { detectProxy, fromProxyUrl, isProxied, toProxyUrl, type ProxyMode } from './proxy';
+import { detectProxy, fromProxyUrl, isProxied, routeUri, type ProxyInfo, type ProxyMode } from './proxy';
 
 export type StreamFormat = 'DASH' | 'HLS' | 'unknown';
 
@@ -90,12 +90,13 @@ export class PlayerController extends EventTarget {
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
 
-  proxyAvailable = false;
+  proxy: ProxyInfo | null = null;
   usingProxy = false;
   format: StreamFormat = 'unknown';
   loadedUrl: string | null = null;
 
   private options: LoadOptions | null = null;
+  private warnedSegmentHosts = new Set<string>();
   private netSeq = 0;
   private tickTimer: number | undefined;
 
@@ -116,9 +117,21 @@ export class PlayerController extends EventTarget {
 
   async init(): Promise<void> {
     await this.player.attach(this.video);
-    this.proxyAvailable = await detectProxy();
-    this.info(`Shaka Player ${shaka.Player.version} ready${this.proxyAvailable ? ', local CORS proxy available' : ''}`);
+    this.proxy = await detectProxy();
+    this.info(`Shaka Player ${shaka.Player.version} ready · ${this.proxyDescription()}`);
     this.tickTimer = window.setInterval(() => this.tick(), 1000);
+  }
+
+  get proxyAvailable(): boolean {
+    return this.proxy !== null;
+  }
+
+  proxyDescription(): string {
+    if (!this.proxy) return 'no CORS proxy on this server';
+    const where = this.proxy.kind === 'cloudflare' ? 'Cloudflare CORS proxy' : 'local CORS proxy';
+    return this.proxy.segments
+      ? `${where} available (manifests and segments)`
+      : `${where} available for manifests/playlists only; segments always load directly`;
   }
 
   static isBrowserSupported(): boolean {
@@ -176,6 +189,7 @@ export class PlayerController extends EventTarget {
   }
 
   private resetSession() {
+    this.warnedSegmentHosts.clear();
     this.network.length = 0;
     this.documents.clear();
     this.samples.length = 0;
@@ -191,12 +205,15 @@ export class PlayerController extends EventTarget {
   private installFilters() {
     const net = this.player.getNetworkingEngine()!;
 
-    net.registerRequestFilter((_type, request) => {
+    const RT = shaka.net.NetworkingEngine.RequestType;
+    net.registerRequestFilter((type, request) => {
       const headers = this.options?.headers ?? {};
-      request.uris = request.uris.map((u) => {
-        if (this.usingProxy && /^https?:/i.test(u) && !isProxied(u)) return toProxyUrl(u);
-        return u;
-      });
+      // Guardrail: only manifests/playlists (and the DASH timing source) are
+      // proxied unless the proxy explicitly allows segments.
+      const isManifest = type === RT.MANIFEST || type === RT.TIMING;
+      request.uris = request.uris.map((u) =>
+        routeUri(u, { useProxy: this.usingProxy, isManifest, segmentsAllowed: this.proxy?.segments ?? false }),
+      );
       const proxied = request.uris.some((u) => isProxied(u));
       for (const [k, v] of Object.entries(headers)) {
         // Through the proxy, custom headers are forwarded as X-Proxy-Header-*.
@@ -233,6 +250,21 @@ export class PlayerController extends EventTarget {
         aborted: boolean;
       };
       if (ev.aborted) return;
+      const failedUri = fromProxyUrl(ev.request?.uris?.[0] ?? '');
+      if (
+        ev.requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT &&
+        this.usingProxy &&
+        this.proxy &&
+        !this.proxy.segments &&
+        !this.warnedSegmentHosts.has(hostOf(failedUri))
+      ) {
+        this.warnedSegmentHosts.add(hostOf(failedUri));
+        this.warn(
+          `Segment from ${hostOf(failedUri)} failed. This proxy only carries manifests/playlists, so segments ` +
+            'load directly and need CORS on their CDN. Fix: enable CORS on that CDN, use `npm run dev` locally, ' +
+            'or set PROXY_SEGMENTS=true on the Worker (one Worker request per segment).',
+        );
+      }
       this.pushNetwork({
         type: REQUEST_TYPE_NAMES[ev.requestType] ?? 'request',
         uri: fromProxyUrl(ev.request?.uris?.[0] ?? ''),
@@ -410,6 +442,14 @@ export class PlayerController extends EventTarget {
   async destroy() {
     window.clearInterval(this.tickTimer);
     await this.player.destroy();
+  }
+}
+
+function hostOf(uri: string): string {
+  try {
+    return new URL(uri).host;
+  } catch {
+    return uri;
   }
 }
 

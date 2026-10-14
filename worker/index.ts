@@ -13,11 +13,19 @@
  *   PROXY_ALLOWED_HOSTS  Comma-separated origin hosts the proxy may fetch,
  *                        e.g. "*.akamaized.net,cdn.example.com".
  *                        Empty = any host (only do this behind Cloudflare Access).
+ *   PROXY_SEGMENTS       "true" to also proxy media segments. Default "false":
+ *                        only manifests/playlists are proxied, so playback does
+ *                        not burn one Worker request per segment. The app reads
+ *                        this from /__proxy/health and sends segments directly;
+ *                        the Worker also refuses segment requests itself.
  */
 
 import {
   CORS_HEADERS,
   CUSTOM_HEADER_PREFIX,
+  type ProxyHealth,
+  isMediaContentType,
+  isMediaPath,
   FORWARD_REQUEST_HEADERS,
   FORWARD_RESPONSE_HEADERS,
   PREFIX,
@@ -30,6 +38,7 @@ export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   PROXY_ENABLED?: string;
   PROXY_ALLOWED_HOSTS?: string;
+  PROXY_SEGMENTS?: string;
 }
 
 const text = (body: string, status: number, extra: Record<string, string> = {}) =>
@@ -44,7 +53,12 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
 
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   // The app calls /health at start-up to decide whether to offer the proxy.
-  if (url.pathname === `${PREFIX}health`) return enabled ? text('ok', 200) : text('disabled', 404);
+  const segments = env.PROXY_SEGMENTS === 'true';
+  if (url.pathname === `${PREFIX}health`) {
+    if (!enabled) return text('disabled', 404);
+    const health: ProxyHealth = { status: 'ok', kind: 'cloudflare', segments };
+    return text(JSON.stringify(health), 200, { 'Content-Type': 'application/json' });
+  }
   if (!enabled) return text('The CORS proxy is disabled on this deployment (PROXY_ENABLED is not "true").', 404);
   if (request.method !== 'GET' && request.method !== 'HEAD') return text('Method not allowed', 405);
 
@@ -54,6 +68,11 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
   const allowed = (env.PROXY_ALLOWED_HOSTS ?? '').split(',').filter((h) => h.trim());
   if (!isHostAllowed(target.hostname, allowed)) {
     return text(`Host ${target.hostname} is not in PROXY_ALLOWED_HOSTS`, 403);
+  }
+
+  // Guardrail: refuse segments before fetching anything (no origin traffic).
+  if (!segments && isMediaPath(target)) {
+    return text('Media segments are not proxied on this deployment (PROXY_SEGMENTS is not "true").', 403);
   }
 
   const headers = new Headers();
@@ -70,6 +89,12 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
     upstream = await fetch(target.toString(), { method: request.method, headers, redirect: 'manual' });
   } catch (err) {
     return text(`Proxy error fetching ${target}: ${err instanceof Error ? err.message : String(err)}`, 502);
+  }
+
+  // Guardrail, second check: segments without a telling file extension.
+  if (!segments && isMediaContentType(upstream.headers.get('content-type'))) {
+    await upstream.body?.cancel();
+    return text('Media segments are not proxied on this deployment (PROXY_SEGMENTS is not "true").', 403);
   }
 
   const out = new Headers(CORS_HEADERS);

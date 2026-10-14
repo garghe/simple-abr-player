@@ -283,8 +283,8 @@ $('#export-btn').addEventListener('click', () => {
 renderHistory();
 await ctrl.init();
 proxyStatus.textContent = ctrl.proxyAvailable
-  ? 'Local proxy detected (dev/preview server).'
-  : 'Local proxy not available — static build. Streams must send CORS headers.';
+  ? `${ctrl.proxyDescription()[0].toUpperCase()}${ctrl.proxyDescription().slice(1)}.`
+  : 'No CORS proxy on this server: streams must send CORS headers.';
 proxyStatus.className = ctrl.proxyAvailable ? 'ok' : 'warn';
 
 const initial = new URLSearchParams(location.search).get('url');

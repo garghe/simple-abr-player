@@ -20,9 +20,39 @@ describe('Cloudflare Worker', () => {
     expect(res.status).toBe(404);
   });
 
-  it('answers health when enabled', async () => {
+  it('reports its capabilities on /health', async () => {
     const res = await worker.fetch(req('/__proxy/health'), env());
-    expect(await res.text()).toBe('ok');
+    expect(await res.json()).toEqual({ status: 'ok', kind: 'cloudflare', segments: false });
+    const withSegments = await worker.fetch(req('/__proxy/health'), env({ PROXY_SEGMENTS: 'true' }));
+    expect(await withSegments.json()).toMatchObject({ segments: true });
+  });
+
+  it('refuses segments by file extension without contacting the origin', async () => {
+    const fetchMock = vi.fn(async () => new Response('x'));
+    vi.stubGlobal('fetch', fetchMock);
+    for (const path of ['/v/chunk-1.m4s', '/v/seg.ts', '/v/init.mp4', '/subs/en.vtt', '/a/seg.aac?x=1']) {
+      const res = await worker.fetch(req(`/__proxy/https/cdn.example.com${path}`), env());
+      expect(res.status, path).toBe(403);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses segments by Content-Type when the URL has no extension', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bytes', { headers: { 'content-type': 'video/mp4' } })));
+    const res = await worker.fetch(req('/__proxy/https/cdn.example.com/QualityLevels(1)/Fragments(video=0)'), env());
+    expect(res.status).toBe(403);
+  });
+
+  it('still proxies playlists served with an audio/mpegurl type', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('#EXTM3U', { headers: { 'content-type': 'audio/mpegurl' } })));
+    const res = await worker.fetch(req('/__proxy/https/cdn.example.com/live/index'), env());
+    expect(res.status).toBe(200);
+  });
+
+  it('proxies segments when PROXY_SEGMENTS is true', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bytes', { headers: { 'content-type': 'video/mp4' } })));
+    const res = await worker.fetch(req('/__proxy/https/cdn.example.com/v/chunk-1.m4s'), env({ PROXY_SEGMENTS: 'true' }));
+    expect(res.status).toBe(200);
   });
 
   it('proxies with CORS headers, forwards Range and custom headers', async () => {

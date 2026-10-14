@@ -15,7 +15,11 @@
     "PROXY_ENABLED": "false",
     // Comma-separated hosts the proxy may fetch, e.g. "*.akamaized.net,cdn.example.com".
     // Empty = any host: only do that with "Protect with Cloudflare Access" turned on.
-    "PROXY_ALLOWED_HOSTS": ""
+    "PROXY_ALLOWED_HOSTS": "",
+    // Guardrail: "false" = only manifests/playlists go through the proxy; video,
+    // audio and subtitle segments are always fetched directly by the browser.
+    // Set "true" only if the segment CDN itself blocks CORS (costs 1 request per segment).
+    "PROXY_SEGMENTS": "false"
   },
   "observability": { "enabled": true }
 }

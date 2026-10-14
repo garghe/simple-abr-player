@@ -166,12 +166,22 @@ To turn it on, set these variables in **Worker → Settings → Variables and Se
 | --- | --- | --- |
 | `PROXY_ENABLED` | `true` | Turns `/__proxy/…` on. |
 | `PROXY_ALLOWED_HOSTS` | e.g. `*.akamaized.net,cdn.example.com` | Comma-separated origin hosts the proxy may fetch (`*.` matches subdomains). **Strongly recommended.** Other hosts get `403`. Empty means any host, so only leave it empty with **Protect with Cloudflare Access** turned on, so that only people you allow can use the site. |
+| `PROXY_SEGMENTS` | `false` (default) | **Segment guardrail.** Only manifests and playlists go through the Worker; video, audio, subtitle and init segments are always fetched directly by the browser. Set `true` only if the segment CDN itself blocks CORS (then every segment costs one Worker request). |
 
 > **Note:** variables set in the dashboard are overwritten by the values in `wrangler.jsonc` on the next deploy from Git. To keep dashboard values, either edit `wrangler.jsonc` in the repo (recommended), or remove the `"vars"` block.
 
 Things to know when the proxy is on:
 
-- Every manifest and segment request then passes through the Worker, so it counts towards your [Workers request limits](https://developers.cloudflare.com/workers/platform/limits/). The free plan allows 100,000 requests per day, which a few hours of segment-by-segment playback can use up. Prefer **Auto** mode in the app, which only uses the proxy when a direct request fails.
+- **Request usage is kept low by the segment guardrail.** Each proxied request counts towards your [Workers request limits](https://developers.cloudflare.com/workers/platform/limits/) (free plan: 100,000 per day). With `PROXY_SEGMENTS=false` the proxy only carries manifests and playlists:
+  - **VOD:** a handful of requests per stream (the manifest and, for HLS, its playlists).
+  - **Live DASH:** one request per manifest refresh.
+  - **Live HLS:** one request per playlist refresh, about one per segment duration for each active playlist (video + audio). That's roughly 1,200–3,600 per hour, so live HLS through the proxy is the case that still uses requests.
+- How the guardrail works, in two layers:
+  1. **In the player:** `/__proxy/health` reports `"segments": false`, so the player routes only manifests and playlists through the proxy. Segments, including ones whose relative URLs point into the proxy, are sent directly to the CDN.
+  2. **In the Worker:** if a segment request arrives anyway, it's refused with `403` before anything is fetched (checked by file extension, then by response `Content-Type`).
+- **When it bites:** if the segment CDN also blocks CORS, the segments fail and the **Log** tab explains it, naming the host. Fix it with CORS on that CDN (best), `npm run dev` locally, or `PROXY_SEGMENTS=true`.
+- Keep the app on **Auto** mode, which only uses the proxy when a direct request fails. Streams that already allow browser access then use no Worker requests at all.
+- The local `npm run dev` proxy has no such limits and proxies segments too.
 - The Worker fetches from Cloudflare's network, not your office network, so origins that are only reachable internally (VPN or private IPs) still need the local `npm run dev` proxy.
 
 ### Checking a deployment
@@ -180,7 +190,8 @@ Things to know when the proxy is on:
 | --- | --- |
 | `https://<your-worker>/` | The player |
 | `https://<your-worker>/samples/scte-demo/dash.mpd` | The bundled sample MPD |
-| `https://<your-worker>/__proxy/health` | `ok` when the proxy is on; `404 disabled` when off |
+| `https://<your-worker>/__proxy/health` | `{"status":"ok","kind":"cloudflare","segments":false}` when the proxy is on; `404 disabled` when off |
+| `https://<your-worker>/__proxy/https/<host>/<path>/seg.m4s` | `403` while `PROXY_SEGMENTS` is `false` (guardrail working) |
 
 To try the Worker locally with the same runtime Cloudflare uses: `npm run build && npx wrangler dev`. Add `--var PROXY_ENABLED:true` to test the proxy.
 
@@ -275,8 +286,8 @@ flowchart LR
 | --- | --- |
 | `src/player/controller.ts` | **The only code that talks to Shaka Player.** Loads streams (including the automatic retry through the proxy), applies custom headers and proxy rewriting to every request, keeps the network log and fetched manifests, collects SCTE events, converts HLS marker times to player times, samples the stats every second, and keeps the event log. Notifies the UI through simple events (`tick`, `tracks`, `scte`, `network`, `documents`, `log`, `loaded`, `error`). |
 | `src/player/proxy.ts` | Converts URLs to and from their proxied form, and checks whether the proxy is available. |
-| `server/proxy-shared.ts` | Proxy rules shared by the local server and the Worker: URL mapping, which headers are passed through, CORS headers, redirect rewriting, host allowlist. |
-| `worker/index.ts` | Cloudflare Worker: serves the built site and, when `PROXY_ENABLED` is `true`, runs the CORS proxy (limited to `PROXY_ALLOWED_HOSTS`). |
+| `server/proxy-shared.ts` | Proxy rules shared by the local server and the Worker: URL mapping, which headers are passed through, CORS headers, redirect rewriting, host allowlist, segment detection and the `/health` capability format. |
+| `worker/index.ts` | Cloudflare Worker: serves the built site and, when `PROXY_ENABLED` is `true`, runs the CORS proxy (limited to `PROXY_ALLOWED_HOSTS`, and to manifests/playlists unless `PROXY_SEGMENTS` is `true`). |
 | `server/proxy-plugin.ts` | Adds the CORS proxy to the Vite dev and preview servers. Passes ranges, headers and redirects through, and follows the HTTPS proxy settings. |
 | `src/scte/scte35.ts` | SCTE-35 decoder, CRC check, summaries, and out/in and duration helpers. No dependencies; unit-tested against published sample messages. |
 | `src/scte/hls-cues.ts` | Finds ad-marker tags in HLS playlists and links each one to its segment, timestamp and position. |
@@ -360,7 +371,8 @@ The unit tests cover:
 - **HLS tag parsing**: attribute lists, DATERANGE, CUE-OUT/CONT/IN and OATCLS, segment and timestamp linking, VOD vs live.
 - **Marker monitor**: duplicate removal across playlists and refreshes, active-break detection, and joining a live stream mid-break.
 - **Proxy URL conversion**: round trips, relative URLs, how the server reads the target URL, and the host allowlist.
-- **Cloudflare Worker**: static files passed through, proxy off by default, health check, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking.
+- **Cloudflare Worker**: static files passed through, proxy off by default, health check and capabilities, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking, and the segment guardrail (blocked by extension without contacting the origin, blocked by Content-Type, playlists still allowed, `PROXY_SEGMENTS=true` override).
+- **Request routing**: manifests proxied, segments sent directly, relative segment URLs taken back out of the proxy, own-site files never proxied.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
 
@@ -405,6 +417,7 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | Nothing plays from a deployed `https://` site | The stream is `http://` (blocked as mixed content) or doesn't allow browser access. Run locally with `npm run dev`. |
 | Proxy can't reach the origin behind a corporate proxy | Set `HTTPS_PROXY` (and `NODE_EXTRA_CA_CERTS` if your company inspects HTTPS) before `npm run dev`. |
 | On Cloudflare, a stream fails with a CORS error and the app doesn't offer the proxy | The proxy is off on the Worker. Set `PROXY_ENABLED=true` (and `PROXY_ALLOWED_HOSTS`), then redeploy. Check with `/__proxy/health`. |
+| On Cloudflare the manifest loads but segments fail; the Log says *"This proxy only carries manifests/playlists"* | The segment CDN blocks CORS. Enable CORS on that CDN, use `npm run dev`, or set `PROXY_SEGMENTS=true` (one Worker request per segment). |
 | Proxy returns `403 … not in PROXY_ALLOWED_HOSTS` | Add the origin's host (or `*.domain`) to `PROXY_ALLOWED_HOSTS`. |
 | `npm run screenshots` can't find a browser | Run `npx playwright install chromium`, or set `CHROMIUM_PATH` to a Chrome or Chromium executable. |
 

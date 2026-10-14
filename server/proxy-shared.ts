@@ -75,3 +75,29 @@ export function isHostAllowed(host: string, patterns: string[]): boolean {
     return h === pattern;
   });
 }
+
+/** JSON returned by /__proxy/health so the app knows what the proxy allows. */
+export interface ProxyHealth {
+  status: 'ok';
+  /** 'local' = Vite dev/preview server, 'cloudflare' = deployed Worker. */
+  kind: 'local' | 'cloudflare';
+  /** Whether media segments may be proxied (manifests/playlists always may). */
+  segments: boolean;
+}
+
+/** File extensions of media segments, init segments, subtitles and thumbnails. */
+const MEDIA_EXTENSIONS =
+  /\.(m4s|m4v|m4a|m4f|mp4|cmfv|cmfa|cmft|ts|aac|ac3|ec3|mp3|webm|weba|vtt|webvtt|ttml|dfxp|srt|jpg|jpeg|png|key)$/i;
+
+/** True when the URL path looks like a media segment rather than a manifest. */
+export function isMediaPath(url: URL): boolean {
+  return MEDIA_EXTENSIONS.test(url.pathname);
+}
+
+/** True when a response Content-Type is media rather than a manifest/playlist. */
+export function isMediaContentType(contentType: string | null): boolean {
+  if (!contentType) return false;
+  const t = contentType.split(';')[0].trim().toLowerCase();
+  if (/mpegurl/.test(t)) return false; // audio/mpegurl, application/vnd.apple.mpegurl …
+  return /^(video|audio|image)\//.test(t) || t === 'application/mp4' || t === 'text/vtt' || t === 'application/ttml+xml';
+}

@@ -5,6 +5,7 @@ import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
 import {
   CORS_HEADERS,
   CUSTOM_HEADER_PREFIX,
+  type ProxyHealth,
   FORWARD_REQUEST_HEADERS,
   FORWARD_RESPONSE_HEADERS,
   PREFIX,
@@ -58,9 +59,10 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.N
     return res.end();
   }
   if (url === `${PREFIX}health`) {
-    res.setHeader('Content-Type', 'text/plain');
+    const health: ProxyHealth = { status: 'ok', kind: 'local', segments: true };
+    res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    return res.end('ok');
+    return res.end(JSON.stringify(health));
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.statusCode = 405;

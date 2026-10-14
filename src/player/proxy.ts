@@ -31,12 +31,42 @@ export function fromProxyUrl(url: string, origin = globalThis.location?.origin ?
   return m ? `${m[1]}://${m[2]}` : url;
 }
 
-/** True when the dev/preview server exposes the proxy. */
-export async function detectProxy(): Promise<boolean> {
+export interface ProxyInfo {
+  /** 'local' = Vite dev/preview server, 'cloudflare' = deployed Worker. */
+  kind: 'local' | 'cloudflare';
+  /** Whether media segments may go through the proxy. */
+  segments: boolean;
+}
+
+/** Asks the server which proxy (if any) it offers. Null when there is none. */
+export async function detectProxy(): Promise<ProxyInfo | null> {
   try {
     const res = await fetch(`${PROXY_PREFIX}health`, { cache: 'no-store' });
-    return res.ok && (await res.text()).trim() === 'ok';
+    if (!res.ok) return null;
+    const body = (await res.text()).trim();
+    if (body === 'ok') return { kind: 'local', segments: true }; // older servers
+    const json = JSON.parse(body) as { status?: string; kind?: string; segments?: boolean };
+    if (json.status !== 'ok') return null;
+    return { kind: json.kind === 'cloudflare' ? 'cloudflare' : 'local', segments: json.segments === true };
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * Decides where one request goes. Manifests and playlists use the proxy when
+ * proxying is on; segments only when the proxy allows them. A segment whose
+ * URL was resolved against a proxied playlist (relative URI) is turned back
+ * into a direct URL, so it never consumes a proxy request by accident.
+ */
+export function routeUri(
+  uri: string,
+  opts: { useProxy: boolean; isManifest: boolean; segmentsAllowed: boolean; origin?: string },
+): string {
+  const origin = opts.origin ?? globalThis.location?.origin ?? '';
+  const proxyThis = opts.useProxy && (opts.isManifest || opts.segmentsAllowed);
+  // Files on the app's own site never need the proxy.
+  const sameSite = origin !== '' && uri.startsWith(`${origin}/`) && !isProxied(uri, origin);
+  if (proxyThis) return /^https?:/i.test(uri) && !sameSite ? toProxyUrl(uri, origin) : uri;
+  return isProxied(uri, origin) ? fromProxyUrl(uri, origin) : uri;
 }
