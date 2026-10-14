@@ -34,10 +34,10 @@ export class NetworkTab {
 
     this.body.replaceChildren(
       dataTable(
-        ['Time', 'Type', 'Status', 'Size', 'Time', 'Throughput', 'URL'],
+        ['Time', 'Type', 'Status', 'Size', 'Duration', 'Throughput', 'URL'],
         entries.map((e) => [
           h('span', { class: 'mono' }, clock(e.at)),
-          e.type,
+          e.type.replace(/^media /, ''),
           e.error
             ? badge(e.status ? String(e.status) : 'ERR', 'warn')
             : badge(String(e.status ?? '—'), e.status && e.status < 400 ? 'ok' : 'warn'),

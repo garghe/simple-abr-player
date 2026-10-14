@@ -774,7 +774,14 @@ textarea {
   background: var(--danger);
 }
 
+/* Header and tab bar keep their height; only the tab body scrolls. */
+.stats-head,
+.tabs {
+  flex-shrink: 0;
+}
+
 .tab-body {
+  flex: 1 1 auto;
   overflow: auto;
   padding: 4px 14px 16px;
   min-height: 300px;
@@ -844,6 +851,8 @@ table.grid td.empty {
 }
 
 .network-table .url {
+  display: inline-block;
+  min-width: 150px;
   word-break: break-all;
 }
 
