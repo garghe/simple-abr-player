@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Web player for clear MPEG-DASH and HLS streams with stats-for-nerds and SCTE-35 inspection",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
