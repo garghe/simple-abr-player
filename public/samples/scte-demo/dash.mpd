@@ -39,13 +39,20 @@
 				</SegmentTemplate>
 			</Representation>
 		</AdaptationSet>
-		<AdaptationSet id="3" contentType="text" mimeType="text/vtt" lang="en">
+		<AdaptationSet id="3" contentType="audio" startWithSAP="1" segmentAlignment="true" bitstreamSwitching="true" lang="eng">
+			<Representation id="4" mimeType="audio/mp4" codecs="opus" bandwidth="160000" audioSamplingRate="48000">
+				<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="6" />
+				<SegmentTemplate timescale="1000000" duration="2000000" initialization="init-stream$RepresentationID$.m4s" media="chunk-stream$RepresentationID$-$Number%05d$.m4s" startNumber="1">
+				</SegmentTemplate>
+			</Representation>
+		</AdaptationSet>
+		<AdaptationSet id="10" contentType="text" mimeType="text/vtt" lang="en">
 			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
 			<Representation id="subs_en" bandwidth="256">
 				<BaseURL>subs_en.vtt</BaseURL>
 			</Representation>
 		</AdaptationSet>
-		<AdaptationSet id="4" contentType="text" mimeType="text/vtt" lang="it">
+		<AdaptationSet id="11" contentType="text" mimeType="text/vtt" lang="it">
 			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
 			<Representation id="subs_it" bandwidth="256">
 				<BaseURL>subs_it.vtt</BaseURL>

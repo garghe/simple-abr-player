@@ -106,7 +106,22 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await page.close();
 }
 
-// 4. Load settings (CORS proxy, headers).
+// 4. Audio tab with the 5.1 track (meters + loudness).
+{
+  const page = await open(DASH_SAMPLE);
+  await page.waitForTimeout(1500);
+  await page.selectOption('select[aria-label="Audio track"]', { label: 'English · 5.1' }).catch(() =>
+    page.selectOption('select[aria-label="Audio track"]', { index: 2 }),
+  );
+  await page.waitForTimeout(6000);
+  await tab(page, 'Audio');
+  await showControls(page);
+  await page.waitForTimeout(600);
+  await shot(page, 'audio.png');
+  await page.close();
+}
+
+// 5. Load settings (CORS proxy, headers).
 {
   const page = await open(DASH_SAMPLE);
   await page.waitForTimeout(1500);
@@ -117,7 +132,7 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await page.close();
 }
 
-// 5. Light theme.
+// 6. Light theme.
 {
   const page = await open(DASH_SAMPLE);
   await page.waitForTimeout(1500);
@@ -131,7 +146,7 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await page.close();
 }
 
-// 6. Phone layout.
+// 7. Phone layout.
 {
   const page = await open(DASH_SAMPLE, { width: 390, height: 844 });
   await page.waitForTimeout(1500);

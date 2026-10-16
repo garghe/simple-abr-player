@@ -1,5 +1,7 @@
 import './styles.css';
+import { AudioEngine } from './audio/engine';
 import { PlayerController, describeShakaError } from './player/controller';
+import { AudioOverlay } from './ui/audio/overlay';
 import { presets } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
 import { snapshot } from './ui/stats/overview';
@@ -114,8 +116,30 @@ const overlay = {
 installSplitter($('.layout'), $('#splitter'));
 // Redraw canvas-based views (the chart) in the new colours.
 installThemeToggle($('#theme-btn') as HTMLButtonElement, () => ctrl.dispatchEvent(new CustomEvent('tick')));
-const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'));
-new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e));
+const audio = new AudioEngine(video);
+ctrl.onAudioSegment = (kind, id, data, start) =>
+  kind === 'init' ? audio.stream.init(id, data) : audio.stream.segment(id, data, start);
+// Forward audio updates as controller events so the stats panel can subscribe.
+audio.on('levels', () => ctrl.dispatchEvent(new CustomEvent('audio')));
+audio.on('state', () => ctrl.dispatchEvent(new CustomEvent('audio')));
+new AudioOverlay($('#audio-overlay'), audio, ctrl);
+// Integrated loudness is "since load / since the audio track changed".
+let audioTrackKey = '';
+const resetAudioOnTrackChange = () => {
+  const t = ctrl.loadedUrl ? ctrl.player.getAudioTracks().find((x) => x.active) : undefined;
+  audio.activeStreamId = ctrl.loadedUrl ? (ctrl.player.getVariantTracks().find((v) => v.active)?.audioId ?? null) : null;
+  const key = `${ctrl.loadedUrl}|${t?.language}|${t?.label}|${t?.channelsCount}|${t?.codecs}`;
+  if (key !== audioTrackKey) {
+    audioTrackKey = key;
+    audio.reset();
+  }
+};
+// A new load starts a new measurement session.
+ctrl.on('reset', () => audio.clearStream());
+ctrl.on('loaded', resetAudioOnTrackChange);
+ctrl.on('tracks', resetAudioOnTrackChange);
+const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio);
+new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
 
 function renderOverlay() {
   if (!overlay.visible) return;
@@ -224,7 +248,7 @@ async function load(url: string) {
         await video.play();
       } catch {
         // Autoplay with sound is blocked until the user interacts: retry muted.
-        video.muted = true;
+        audio.setMuted(true);
         await video.play().catch(() => undefined);
         showToast('Autoplay with sound was blocked — playing muted');
       }
@@ -269,6 +293,7 @@ $('#export-btn').addEventListener('click', () => {
     audioTracks: loaded ? p.getAudioTracks() : [],
     textTracks: loaded ? p.getTextTracks() : [],
     scte35: ctrl.scte.list().map(({ hls: _hls, ...e }) => e),
+    audio: { state: audio.state, decodedChannels: audio.channels, sampleRate: audio.sampleRate, reading: audio.lastReading },
     network: ctrl.network,
     log: ctrl.log,
   };
@@ -294,4 +319,4 @@ if (initial) {
 }
 
 // Exposed for debugging from the console.
-Object.assign(window, { abrPlayer: ctrl });
+Object.assign(window, { abrPlayer: ctrl, abrAudio: audio });

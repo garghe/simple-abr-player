@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the bundled offline sample in public/samples/scte-demo:
 //   - 40 s test pattern, VP9 in fMP4 at 240p and 480p, 2 s segments
-//   - Two Opus audio tracks (English 440 Hz beeps, Italian 660 Hz beeps)
+//   - Three Opus audio tracks: English and Italian stereo (440 / 660 Hz beeps)
+//     and English 5.1 (a different tone and level on each channel)
 //   - English and Italian WebVTT subtitles
 //   - One set of CMAF segments shared by a DASH MPD and an HLS master playlist
 //   - SCTE-35 markers in every common carriage format:
@@ -31,6 +32,20 @@ const BREAK2 = { start: 20, duration: 6, eventId: 2001 }; // time_signal via ems
 
 // ------------------------------------------------------------------ encode
 
+// 5.1 test signal (Web Audio channel order L R C LFE Ls Rs): a different tone
+// and level per channel, each slowly pulsing so the meters move:
+//   L/R 440/554 Hz ≈ -20 dBFS, C 1 kHz ≈ -16 dBFS (dialogue), LFE 50 Hz ≈ -22,
+//   Ls/Rs 300/350 Hz ≈ -28 dBFS.
+const pulse = (rate, phase) => `(0.55+0.45*abs(sin(2*PI*${rate}*t+${phase})))`;
+const SURROUND = [
+  `0.1*${pulse(0.5, 0)}*sin(2*PI*440*t)`,
+  `0.1*${pulse(0.5, 1)}*sin(2*PI*554*t)`,
+  `0.16*${pulse(0.33, 2)}*sin(2*PI*1000*t)`,
+  `0.08*${pulse(0.25, 0)}*sin(2*PI*50*t)`,
+  `0.04*${pulse(0.2, 1)}*sin(2*PI*300*t)`,
+  `0.04*${pulse(0.2, 2)}*sin(2*PI*350*t)`,
+].join('|');
+
 const fonts = [
   '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
   '/Library/Fonts/Arial Bold.ttf',
@@ -58,19 +73,22 @@ execFileSync(
     '-f', 'lavfi', '-i', `testsrc2=size=854x480:rate=25:duration=${DURATION}`,
     '-f', 'lavfi', '-i', `sine=frequency=440:beep_factor=4:duration=${DURATION}`,
     '-f', 'lavfi', '-i', `sine=frequency=660:beep_factor=2:duration=${DURATION}`,
+    '-f', 'lavfi', '-i', `aevalsrc='${SURROUND}':c=5.1:s=48000:d=${DURATION}`,
     '-filter_complex',
     `[0:v]null${common}[base];[base]split=2[a][b];` +
       `[a]scale=426:240${text('240p', ':fontsize=h/14:x=w-tw-12:y=h-th-12')}[v240];` +
       `[b]scale=854:480${text('480p', ':fontsize=h/14:x=w-tw-12:y=h-th-12')}[v480]`,
-    '-map', '[v240]', '-map', '[v480]', '-map', '1:a', '-map', '2:a',
+    '-map', '[v240]', '-map', '[v480]', '-map', '1:a', '-map', '2:a', '-map', '3:a',
     '-c:v', 'libvpx-vp9', '-deadline', 'good', '-cpu-used', '4', '-row-mt', '1',
     '-g', '50', '-keyint_min', '50',
     '-b:v:0', '180k', '-maxrate:v:0', '240k', '-b:v:1', '450k', '-maxrate:v:1', '600k',
-    '-c:a', 'libopus', '-b:a', '48k', '-ac', '2',
-    '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=ita',
+    '-c:a', 'libopus', '-b:a', '48k', '-ac:a:0', '2', '-ac:a:1', '2',
+    // 5.1 Opus needs channel mapping family 1.
+    '-b:a:2', '160k', '-mapping_family:a:2', '1',
+    '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=ita', '-metadata:s:a:2', 'language=eng',
     '-f', 'dash', '-seg_duration', String(SEG), '-use_template', '1', '-use_timeline', '0',
     '-dash_segment_type', 'mp4', '-hls_playlist', '1',
-    '-adaptation_sets', 'id=0,streams=0,1 id=1,streams=2 id=2,streams=3',
+    '-adaptation_sets', 'id=0,streams=0,1 id=1,streams=2 id=2,streams=3 id=3,streams=4',
     'dash.mpd',
   ],
   { cwd: out, stdio: 'inherit' },
@@ -172,7 +190,7 @@ const eventStream = `
 const textSets = ['en', 'it']
   .map(
     (lang, i) => `
-		<AdaptationSet id="${3 + i}" contentType="text" mimeType="text/vtt" lang="${lang}">
+		<AdaptationSet id="${10 + i}" contentType="text" mimeType="text/vtt" lang="${lang}">
 			<Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
 			<Representation id="subs_${lang}" bandwidth="256">
 				<BaseURL>subs_${lang}.vtt</BaseURL>
@@ -231,6 +249,7 @@ writeFileSync(
     '#EXT-X-INDEPENDENT-SEGMENTS',
     '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="media_2.m3u8"',
     '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Italiano",LANGUAGE="it",DEFAULT=NO,AUTOSELECT=YES,CHANNELS="2",URI="media_3.m3u8"',
+    '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="English 5.1",LANGUAGE="en",DEFAULT=NO,AUTOSELECT=YES,CHANNELS="6",URI="media_4.m3u8"',
     '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=NO,AUTOSELECT=YES,URI="subs_en.m3u8"',
     '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Italiano",LANGUAGE="it",DEFAULT=NO,AUTOSELECT=YES,URI="subs_it.m3u8"',
     ...variants.map(([, attrs, uri]) => `#EXT-X-STREAM-INF:${attrs.replace(/AUDIO="[^"]+"/, 'AUDIO="aud",SUBTITLES="subs"')}\n${uri}`),

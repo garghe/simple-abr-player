@@ -518,18 +518,35 @@ body.resizing .player {
   display: none;
 }
 
-.nerd-overlay {
+/* Top-right overlays: audio meters at the edge, stats box to their left. */
+.overlay-stack {
   position: absolute;
   top: 14px;
   right: 14px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 100px);
+  pointer-events: none;
+}
+
+.overlay-stack > * {
+  pointer-events: auto;
+}
+
+.nerd-overlay {
+  position: relative;
   background: rgba(10, 12, 18, 0.82);
   backdrop-filter: blur(4px);
   border-radius: 8px;
   padding: 10px 30px 10px 12px;
   font-family: var(--mono);
   font-size: 11px;
-  max-width: min(460px, calc(100% - 28px));
-  max-height: calc(100% - 100px);
+  max-width: 460px;
+  max-height: 100%;
+  min-width: 0;
   overflow: auto;
 }
 
@@ -1255,5 +1272,250 @@ pre .hl {
 @media (max-width: 720px) {
   .theme-btn span {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------ audio meters */
+
+.meter-bank {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  position: relative;
+}
+
+.meter-ch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.meter-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #1e293b;
+}
+
+.meter-bank.small .meter-bar {
+  width: 8px;
+  height: 110px;
+}
+
+.meter-bank.large {
+  gap: 10px;
+  padding-left: 30px;
+}
+
+.meter-bank.large .meter-bar {
+  width: 22px;
+  height: 170px;
+}
+
+/* Colour zones are fixed to the scale; the fill reveals them from the bottom. */
+.meter-zones {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, #22c55e 0%, #22c55e 70%, #eab308 70%, #eab308 90%, #ef4444 90%);
+}
+
+.meter-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(100% - var(--level, 0%));
+  background: #1e293b;
+  transition: height 0.1s linear;
+}
+
+.meter-hold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  bottom: calc(var(--level, 0%) - 1px);
+  background: #f8fafc;
+}
+
+.meter-ch.lfe .meter-zones {
+  opacity: 0.7;
+}
+
+.meter-ch.clip .meter-bar {
+  box-shadow: 0 0 0 1px #ef4444;
+}
+
+.meter-label {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.meter-bank.large .meter-label {
+  font-size: 11px;
+}
+
+.meter-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  min-width: 34px;
+  text-align: center;
+}
+
+.meter-value.hold {
+  color: var(--muted);
+}
+
+.meter-scale {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 170px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.meter-scale span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+}
+
+.audio-overlay {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  background: rgba(10, 12, 18, 0.82);
+  backdrop-filter: blur(4px);
+  border-radius: 8px;
+  padding: 8px 8px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.audio-overlay[hidden] {
+  display: none;
+}
+
+.audio-overlay .ov-loudness {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: #cbd5e1;
+  white-space: nowrap;
+  align-self: stretch;
+  text-align: right;
+  padding-top: 2px;
+}
+
+.audio-overlay .ov-start {
+  font: inherit;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 4px 8px;
+  max-width: 120px;
+  white-space: normal;
+}
+
+.meters-panel {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 12px 12px 8px;
+  overflow-x: auto;
+}
+
+.loud-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.loud-tile {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.loud-tile small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.loud-tile b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.loud-tile.ok b {
+  color: var(--ok);
+}
+
+.loud-tile.warn b {
+  color: var(--warn);
+}
+
+.loud-tile.bad b {
+  color: var(--danger);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: transparent;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--accent);
+  color: white;
+}
+
+.note {
+  margin-top: 10px;
+  font-size: 12px;
+  border-left: 3px solid var(--ad);
+  background: var(--break-bg);
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+
+.note.info {
+  border-left-color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  .loud-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Smaller players (phones, narrow split): shorter overlay meters. */
+@container (max-width: 600px) {
+  .meter-bank.small .meter-bar {
+    width: 6px;
+    height: 56px;
+  }
+  .audio-overlay {
+    padding: 5px 6px 4px;
   }
 }

@@ -1,3 +1,5 @@
+import type { AudioEngine } from '../audio/engine';
+import { audioPrefs } from '../audio/prefs';
 import type { PlayerController } from '../player/controller';
 import type { ScteEvent } from '../scte/monitor';
 import { clear, h } from './dom';
@@ -25,6 +27,7 @@ export class Controls {
     [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => h('option', { value: String(r), selected: r === 1 }, `${r}×`)),
   );
   private nerdBtn = h('button', { type: 'button', class: 'ctl', 'aria-label': 'Stats overlay (i)', title: 'Stats overlay (i)', 'aria-pressed': 'false' });
+  private metersBtn = h('button', { type: 'button', class: 'ctl', 'aria-label': 'Audio meters (a)', title: 'Audio meters (a)' });
   private pipBtn = h('button', { type: 'button', class: 'ctl', 'aria-label': 'Picture-in-picture', title: 'Picture-in-picture' });
   private fsBtn = h('button', { type: 'button', class: 'ctl', 'aria-label': 'Fullscreen (f)', title: 'Fullscreen (f)' });
   readonly seekbar: SeekBar;
@@ -35,12 +38,14 @@ export class Controls {
     private readonly playerEl: HTMLElement,
     private readonly overlay: { toggle(): boolean },
     onMarkerClick: (e: ScteEvent) => void,
+    private readonly audio: AudioEngine,
   ) {
     this.seekbar = new SeekBar(ctrl, onMarkerClick);
     const video = ctrl.video;
 
     this.playBtn.innerHTML = icons.play;
     this.nerdBtn.innerHTML = icons.nerd;
+    this.metersBtn.innerHTML = icons.meters;
     this.pipBtn.innerHTML = icons.pip;
     this.fsBtn.innerHTML = icons.fullscreen;
     this.pipBtn.hidden = !document.pictureInPictureEnabled;
@@ -60,6 +65,7 @@ export class Controls {
         h('label', { class: 'ctl-label' }, h('span', null, 'Subs'), this.textSel),
         h('label', { class: 'ctl-label' }, h('span', null, 'Quality'), this.qualitySel),
         this.speedSel,
+        this.metersBtn,
         this.nerdBtn,
         this.pipBtn,
         this.fsBtn,
@@ -67,11 +73,17 @@ export class Controls {
     );
 
     this.playBtn.onclick = () => this.togglePlay();
-    this.muteBtn.onclick = () => (video.muted = !video.muted);
+    // Volume goes through the audio engine (Web Audio gain once meters run).
+    this.muteBtn.onclick = () => audio.setMuted(!audio.muted);
     this.volume.oninput = () => {
-      video.volume = Number(this.volume.value);
-      video.muted = video.volume === 0;
+      const v = Number(this.volume.value);
+      audio.setVolume(v);
+      if (v === 0) audio.setMuted(true);
     };
+    this.metersBtn.onclick = () => (audioPrefs.overlay = !audioPrefs.overlay);
+    audioPrefs.onChange(() => this.metersBtn.setAttribute('aria-pressed', String(audioPrefs.overlay)));
+    this.metersBtn.setAttribute('aria-pressed', String(audioPrefs.overlay));
+    audio.on('volume', () => this.renderVolume());
     this.liveBtn.onclick = () => ctrl.player.goToLive();
     this.speedSel.onchange = () => (video.playbackRate = Number(this.speedSel.value));
     this.nerdBtn.onclick = () => this.nerdBtn.setAttribute('aria-pressed', String(this.overlay.toggle()));
@@ -83,7 +95,6 @@ export class Controls {
 
     video.addEventListener('play', () => this.renderPlayState());
     video.addEventListener('pause', () => this.renderPlayState());
-    video.addEventListener('volumechange', () => this.renderVolume());
     video.addEventListener('ratechange', () => (this.speedSel.value = String(video.playbackRate)));
     video.addEventListener('timeupdate', () => this.updateTime());
     video.addEventListener('click', () => this.togglePlay());
@@ -132,7 +143,7 @@ export class Controls {
   }
 
   private renderVolume() {
-    const v = this.ctrl.video;
+    const v = this.audio;
     this.muteBtn.innerHTML = v.muted || v.volume === 0 ? icons.muted : icons.volume;
     this.volume.value = String(v.muted ? 0 : v.volume);
     this.volume.style.setProperty('--fill', `${(v.muted ? 0 : v.volume) * 100}%`);
@@ -295,14 +306,17 @@ export class Controls {
             v.currentTime += 5;
             return true;
           case 'ArrowUp':
-            v.volume = Math.min(1, v.volume + 0.1);
-            v.muted = false;
+            this.audio.setVolume(this.audio.volume + 0.1);
+            this.audio.setMuted(false);
             return true;
           case 'ArrowDown':
-            v.volume = Math.max(0, v.volume - 0.1);
+            this.audio.setVolume(this.audio.volume - 0.1);
             return true;
           case 'm':
-            v.muted = !v.muted;
+            this.audio.setMuted(!this.audio.muted);
+            return true;
+          case 'a':
+            audioPrefs.overlay = !audioPrefs.overlay;
             return true;
           case 'f':
             this.toggleFullscreen();

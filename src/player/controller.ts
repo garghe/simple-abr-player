@@ -95,6 +95,8 @@ export class PlayerController extends EventTarget {
   format: StreamFormat = 'unknown';
   loadedUrl: string | null = null;
 
+  /** Receives audio init/media segment bytes (for the audio meters). */
+  onAudioSegment: ((kind: 'init' | 'media', streamId: number, data: Uint8Array, startTime: number) => void) | null = null;
   private options: LoadOptions | null = null;
   private warnedSegmentHosts = new Set<string>();
   private netSeq = 0;
@@ -198,6 +200,7 @@ export class PlayerController extends EventTarget {
     this.usingProxy = false;
     this.emit('network');
     this.emit('documents');
+    this.emit('reset');
   }
 
   // ---------------------------------------------------------------- filters
@@ -238,6 +241,15 @@ export class PlayerController extends EventTarget {
       });
       if (type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
         this.captureManifest(uri, response.data, advanced);
+      }
+      const stream = context?.stream;
+      if (this.onAudioSegment && type === shaka.net.NetworkingEngine.RequestType.SEGMENT && stream?.type === 'audio') {
+        const A = shaka.net.NetworkingEngine.AdvancedRequestType;
+        const d = response.data;
+        // Copy: decoding is asynchronous and Shaka owns the original buffer.
+        const bytes = (d instanceof ArrayBuffer ? new Uint8Array(d) : new Uint8Array(d.buffer, d.byteOffset, d.byteLength)).slice();
+        if (advanced === A.INIT_SEGMENT) this.onAudioSegment('init', stream.id, bytes, 0);
+        else if (context?.segment) this.onAudioSegment('media', stream.id, bytes, context.segment.getStartTime());
       }
     });
 

@@ -17,6 +17,7 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Screenshots](#screenshots)
 - [SCTE-35 support](#scte-35-support)
+- [Audio levels and loudness](#audio-levels-and-loudness)
 - [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Testing](#testing)
@@ -36,6 +37,8 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 | **Player controls** | Play/pause, a seek bar showing what's buffered and where the SCTE markers are, volume and mute, **audio track**, **subtitles**, **quality** (Auto or a fixed rendition), playback speed, picture-in-picture, fullscreen, and a jump-to-live button for live streams. |
 | **Stats: Overview** | Format, live or VOD, latency, how far back you can rewind (live), wall-clock playhead, current rendition, codecs, frame rate, SDR or HDR, stream bitrate and estimated bandwidth, buffer, dropped frames, stalls, startup timings. Plus a live graph of bandwidth and buffer. |
 | **Stats: Tracks** | Every video rendition, audio track (language, roles, codec, channels, sample rate), subtitle/caption track, thumbnail track and quality option, with the active ones highlighted. |
+| **Audio meters** | Per-channel level meters on the video (stereo or 5.1), with short-term loudness. On by default; toggle with the **Meters** button or `a`. |
+| **Stats: Audio** | Large per-channel peak meters with peak hold, loudness to **EBU R128** (−23 LUFS) or **ATSC A/85** (−24 LKFS) — momentary, short-term, integrated, true peak, loudness range — and L/R phase correlation. Also compares the channels the manifest declares with the channels actually decoded. |
 | **Stats: SCTE-35** | Every ad marker the app finds, with time, source, OUT/IN direction, a decoded summary and duration. Click a marker to see its full decoded contents and CRC check. Also shows whether you're **in an ad break right now** (with countdown), and includes a **manual decoder** for pasted base64 or hex messages. |
 | **Stats: Network** | Every manifest, playlist and segment request: status, size, time, throughput, errors, and whether it went through the proxy. |
 | **Stats: Manifest** | The raw MPD and every HLS playlist exactly as fetched (refreshes for live streams), with SCTE and ad-related lines highlighted. |
@@ -205,6 +208,9 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 **SCTE-35 tab during an ad break (DASH sample)**: ad-break banner on the video, markers and break regions on the seek bar, the marker list, and the decoded detail of an in-band `time_signal`.
 ![SCTE-35](docs/screenshots/scte-dash.png)
 
+**Audio tab with the 5.1 track**: six channel meters on the video and in the tab, EBU R128 loudness, and decoded-channel information.
+![Audio](docs/screenshots/audio.png)
+
 **Overview with the stats overlay (`i`)**: stream and playback stats, plus the bandwidth and buffer graph.
 ![Overview](docs/screenshots/overview.png)
 
@@ -247,6 +253,45 @@ The app looks for markers in every common way they are carried. Duplicates are r
 The decoder (`src/scte/scte35.ts`) recognises every splice command (`splice_null`, `splice_insert`, `time_signal`, `splice_schedule`, `bandwidth_reservation`, `private_command`). It fully decodes `splice_insert` and `time_signal` (the commands used for ad signalling) and these descriptors (`avail`, `DTMF`, `segmentation` with all segmentation types and UPID types, `time`). It also checks the message's CRC. It accepts base64 or hex. Encrypted messages are flagged but not decrypted.
 
 An ad break counts as **active** from an OUT marker (splice_insert with out-of-network set, or a segmentation type that starts an ad or placement opportunity) until its advertised duration runs out or an IN marker arrives.
+
+---
+
+## Audio levels and loudness
+
+The meters measure the audio **as it is in the stream**, not what your speakers play. Muting or turning the volume down doesn't change them, and a 5.1 track shows six channels even on stereo speakers.
+
+### Where the measurements come from
+
+| Source | Used when | What it measures |
+| --- | --- | --- |
+| **Audio segments, decoded with WebCodecs** (preferred) | fMP4 / CMAF audio the browser's WebCodecs decoder supports: Opus and AAC everywhere WebCodecs exists; FLAC; Dolby only where WebCodecs can decode it | Every encoded channel. Readings are released in step with the playhead. Starts by itself, with no click needed. |
+| **Browser audio output, via Web Audio** (fallback) | Other formats, such as MPEG-2 TS, WebM or packed audio | What the browser decoded. **Chrome mixes multichannel down to your output device first**, so on stereo speakers a 5.1 track shows 2 channels; the Audio tab flags this. Browsers only allow it after a click, so the overlay shows *Click to start audio meters* until then. |
+
+The **Audio tab** shows which source is in use (*Measured from*), and whether the decoded channel count matches the manifest.
+
+### Browser support
+
+| Audio | Stereo meters | 5.1 meters |
+| --- | --- | --- |
+| AAC or Opus, fMP4/CMAF | ✅ browsers with WebCodecs audio decoding (Chrome, Edge, Firefox; recent Safari). Others use the Web Audio fallback. | ✅ |
+| AAC in MPEG-2 TS (HLS) | ✅ (Web Audio fallback, after a click) | ⚠️ only if your output device is 5.1, otherwise downmixed |
+| Dolby Digital / Digital Plus (AC-3, E-AC-3) | Only where the browser plays Dolby at all (Safari; Edge on Windows) | Same, if the browser hands over all channels |
+| Dolby Atmos (E-AC-3 JOC) | as above | 5.1 bed only; height objects can't be metered |
+
+Chrome and Firefox can't decode Dolby at all, so those streams don't play there. The Audio tab says so, including when a stream has Dolby tracks the browser had to hide.
+
+### What is measured
+
+- **Levels:** sample peak per channel in dBFS (−60 to 0), with a 2-second peak hold. Green below −18, yellow to −6, red above; a red outline means the hold reached 0 dBFS. Channel order is L R (stereo) or L R C LFE Ls Rs (5.1).
+- **Loudness** (ITU-R BS.1770-4: K-weighting, surrounds +1.5 dB, LFE excluded):
+  - **Momentary** (400 ms), **short-term** (3 s)
+  - **Integrated:** gated at −70 LUFS absolute and −10 LU relative, measured since the stream or audio track was loaded. **Reset** restarts it.
+  - **Loudness range (LRA):** EBU Tech 3342
+  - **True peak:** 4× oversampled, maximum since reset
+- **L/R correlation:** +1 = mono-compatible, about 0 = wide or unrelated, below −0.2 = phase problem (cancels when mixed to mono).
+- **Standard switch:** **EBU R128** (target −23 LUFS ±1, true peak ≤ −1 dBTP) or **ATSC A/85** (−24 LKFS ±2, ≤ −2 dBTP). The integrated and true-peak tiles turn green or amber/red against the selected target. The choice is remembered.
+
+The measurement code is checked against the EBU reference signals (Tech 3341 and 3342) in the unit tests.
 
 ---
 
@@ -297,6 +342,13 @@ flowchart LR
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
 | `src/ui/theme.ts` | System / Light / Dark toggle. Colours are CSS custom properties switched by `data-theme` on `<html>` (or the OS setting in System mode); a small inline script in `index.html` applies the saved theme before the page first appears. |
+| `src/audio/dsp.ts` | Measurement maths shared by both sources: BS.1770 K-weighting filters, 4× true-peak interpolator, and 100 ms measurement blocks (peak, RMS, K-weighted energy, correlation sums). |
+| `src/audio/loudness.ts` | Turns blocks into momentary, short-term, gated integrated loudness and LRA (fixed-size histograms, so memory stays constant), plus peak hold; the EBU R128 / ATSC A/85 definitions. |
+| `src/audio/mp4.ts` | Minimal fMP4 reader: codec configuration from audio init segments (Opus, AAC, FLAC, AC-3/E-AC-3), sample ranges from media segments. |
+| `src/audio/stream-meter.ts` | Decodes downloaded audio segments with WebCodecs and timestamps each measurement block with its presentation time. |
+| `src/audio/meter.worklet.ts` | AudioWorklet for the Web Audio fallback: measures on the audio thread. |
+| `src/audio/engine.ts` | Picks the source, releases stream measurements as the playhead reaches them, and owns the Web Audio graph (the player volume becomes a gain node, so meters stay pre-volume). |
+| `src/ui/audio/*`, `src/ui/stats/audio.ts` | Meter rows (shared), the overlay on the video, and the Audio tab. |
 | `src/ui/chart.ts` | Small canvas line chart for bandwidth and buffer. |
 | `src/settings.ts`, `src/presets.ts` | Saved settings and URL history (in browser storage, with safe fallbacks), and the list of test streams. |
 
@@ -343,6 +395,7 @@ sequenceDiagram
 │   ├── main.ts                Connects everything: load, settings, overlay, export, share
 │   ├── player/                PlayerController (Shaka wrapper), proxy URL helpers
 │   ├── scte/                  SCTE-35 decoder, HLS cue parser, marker monitor
+│   ├── audio/                 Audio meters: DSP, loudness, fMP4 reader, WebCodecs + Web Audio sources
 │   ├── ui/                    Controls, seek bar, chart, helpers
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
 │   ├── presets.ts             Test stream list
@@ -373,6 +426,8 @@ The unit tests cover:
 - **Marker monitor**: duplicate removal across playlists and refreshes, active-break detection, and joining a live stream mid-break.
 - **Proxy URL conversion**: round trips, relative URLs, how the server reads the target URL, and the host allowlist.
 - **Cloudflare Worker**: static files passed through, proxy off by default, health check and capabilities, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking, and the segment guardrail (blocked by extension without contacting the origin, blocked by Content-Type, playlists still allowed, `PROXY_SEGMENTS=true` override).
+- **Loudness**: BS.1770-4 K-weighting coefficients; EBU Tech 3341 tests 1, 2, 3 and 5 (integrated, momentary, short-term, relative and absolute gates); 5.1 surround weighting and LFE exclusion; EBU Tech 3342 loudness range; true peak against an inter-sample-peak signal; correlation.
+- **fMP4 audio parsing** on the bundled sample: Opus stereo and 5.1 configuration (OpusHead with channel mapping), video init ignored, sample tables.
 - **Request routing**: manifests proxied, segments sent directly, relative segment URLs taken back out of the proxy, own-site files never proxied.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
@@ -383,7 +438,9 @@ For end-to-end checks, `npm run screenshots` drives the real app in Chromium aga
 
 `public/samples/scte-demo/` contains a 40-second sample that works offline, made by `npm run sample` (needs `ffmpeg` with VP9 and Opus support):
 
-- VP9 video at 240p and 480p, two Opus audio tracks (English and Italian), English and Italian WebVTT subtitles.
+- VP9 video at 240p and 480p, English and Italian WebVTT subtitles, and three Opus audio tracks:
+  - English stereo and Italian stereo
+  - **English 5.1**: a different tone and level on each channel (L/R about −20 dBFS, C about −16, LFE 50 Hz about −22, Ls/Rs about −28), each slowly pulsing, to test the 5.1 meters
 - The same segments are used by `dash.mpd` and by the HLS `master.m3u8`.
 - SCTE-35 markers:
   - **6 s → 14 s:** `splice_insert` OUT (8 s) and IN, in a DASH `<EventStream>` / HLS `EXT-X-DATERANGE SCTE35-OUT` + `CUE-OUT` / `CUE-OUT-CONT` / `CUE-IN`.
@@ -404,6 +461,7 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | `c` | Cycle subtitles |
 | `f` | Fullscreen |
 | `i` | Stats overlay on the video |
+| `a` | Audio meters on the video |
 | `l` | Jump to live edge |
 
 ---
@@ -420,6 +478,8 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | On Cloudflare, a stream fails with a CORS error and the app doesn't offer the proxy | The proxy is off on the Worker. Set `PROXY_ENABLED=true` (and `PROXY_ALLOWED_HOSTS`), then redeploy. Check with `/__proxy/health`. |
 | On Cloudflare the manifest loads but segments fail; the Log says *"This proxy only carries manifests/playlists"* | The segment CDN blocks CORS. Enable CORS on that CDN, use `npm run dev`, or set `PROXY_SEGMENTS=true` (one Worker request per segment). |
 | Proxy returns `403 … not in PROXY_ALLOWED_HOSTS` | Add the origin's host (or `*.domain`) to `PROXY_ALLOWED_HOSTS`. |
+| Audio tab says *downmixed by browser* for a 5.1 track | The stream couldn't be decoded directly (see *Measured from*), so the meters use the browser's output, which Chrome mixes to your speakers' channel count. With fMP4 Opus/AAC audio this doesn't happen. |
+| The overlay shows *Click to start audio meters* | This stream's audio can't be decoded directly (e.g. MPEG-2 TS or WebM), and browsers only allow the Web Audio fallback after a click. |
 | `npm run screenshots` can't find a browser | Run `npx playwright install chromium`, or set `CHROMIUM_PATH` to a Chrome or Chromium executable. |
 
 ---
@@ -431,6 +491,7 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 - Low-latency stats (part and chunk timing, playback-rate catch-up).
 - CMCD / CMSD reporting and inspection.
 - A timeline view of SCTE breaks against playback and quality switches.
+- Direct audio metering for MPEG-2 TS and packed-audio HLS (demux ADTS/AC-3), so those streams don't need the Web Audio fallback.
 
 ---
 
