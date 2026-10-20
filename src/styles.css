@@ -1685,3 +1685,15 @@ pre .hl {
     padding-top: 0;
   }
 }
+
+/* Hardware-protected video (Widevine L1/L2): keep the video "overlay-able". */
+.player.hw-protected {
+  border-radius: 0;
+  overflow: visible;
+}
+
+.player.hw-protected .nerd-overlay,
+.player.hw-protected .audio-overlay {
+  backdrop-filter: none;
+  background: rgba(10, 12, 18, 0.92);
+}

@@ -222,6 +222,16 @@ function renderSummary() {
   );
 }
 
+// Hardware-secure Widevine (L1/L2) video is shown through a protected
+// overlay plane; rounded clipping and backdrop blur on top of it make Chrome
+// and Edge show a blank picture, so drop those effects while it is in use.
+function updateProtectedVideo() {
+  const robustness = ctrl.activeDrm()?.videoRobustness ?? '';
+  playerEl.classList.toggle('hw-protected', robustness.startsWith('HW_'));
+}
+ctrl.on('drm', updateProtectedVideo);
+ctrl.on('loaded', updateProtectedVideo);
+
 ctrl.on('tick', () => {
   renderOverlay();
   renderSummary();
