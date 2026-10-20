@@ -355,7 +355,7 @@ $('#export-btn').addEventListener('click', () => {
     log: ctrl.log,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `abr-player-stats-${Date.now()}.json` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `playprobe-stats-${Date.now()}.json` });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });

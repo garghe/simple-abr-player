@@ -1,8 +1,8 @@
 {
-  "name": "simple-abr-player",
+  "name": "playprobe",
   "version": "1.0.0",
   "private": true,
-  "description": "Web player for clear MPEG-DASH and HLS streams with stats-for-nerds and SCTE-35 inspection",
+  "description": "PlayProbe: play and inspect MPEG-DASH and HLS streams, with DRM (Widevine, FairPlay), SCTE-35, audio loudness and stats for nerds",
   "license": "MIT",
   "type": "module",
   "scripts": {

@@ -199,7 +199,7 @@ const textSets = ['en', 'it']
   )
   .join('');
 mpd = mpd
-  .replace(/<ProgramInformation>\s*<\/ProgramInformation>/, '<ProgramInformation><Title>SCTE-35 demo (Simple ABR Player)</Title></ProgramInformation>')
+  .replace(/<ProgramInformation>\s*<\/ProgramInformation>/, '<ProgramInformation><Title>SCTE-35 demo (PlayProbe)</Title></ProgramInformation>')
   .replace(/\s*<ServiceDescription id="0">\s*<\/ServiceDescription>/, '')
   .replace(/(<Period[^>]*>)/, `$1${eventStream}`)
   .replace(

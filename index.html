@@ -11,14 +11,18 @@
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
       } catch {}
     </script>
-    <title>Simple ABR Player</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b82f6'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E" />
+    <title>PlayProbe</title>
+    <meta name="description" content="PlayProbe: play and inspect MPEG-DASH and HLS streams (DRM, SCTE-35, audio loudness, stats for nerds)." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="PlayProbe" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
-        <span class="logo" aria-hidden="true"></span>
-        <span>Simple ABR Player</span>
+        <img class="logo" src="logo.svg" alt="" width="26" height="26" />
+        <span>PlayProbe</span>
         <span class="tagline">DASH · HLS · DRM · SCTE-35</span>
       </div>
       <form id="load-form" class="load-form" autocomplete="off">

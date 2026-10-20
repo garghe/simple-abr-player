@@ -8,7 +8,7 @@
 	mediaPresentationDuration="PT40.0S"
 	maxSegmentDuration="PT2.0S"
 	minBufferTime="PT4.0S">
-	<ProgramInformation><Title>SCTE-35 demo (Simple ABR Player)</Title></ProgramInformation>
+	<ProgramInformation><Title>SCTE-35 demo (PlayProbe)</Title></ProgramInformation>
 	<Period id="0" start="PT0.0S">
 		<EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="90000">
 			<Event presentationTime="540000" duration="720000" id="1001"><Signal xmlns="http://www.scte.org/schemas/35/2016"><Binary>/DAlAAAAAAAAAP/wFAUAAAPpf+/+AAg9YP4ACvyAAAEAAAAA+QC1ng==</Binary></Signal></Event>

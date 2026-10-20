@@ -1,6 +1,12 @@
-# Simple ABR Player
+<p align="center">
+  <img src="public/logo.svg" alt="PlayProbe logo" width="96" height="96">
+</p>
 
-A web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and adds a **"stats for nerds"** panel showing stream properties, live network and buffer behaviour, the raw manifests, DRM and license details, audio levels and loudness, device capabilities and **SCTE-35 ad markers**, decoded field by field.
+<h1 align="center">PlayProbe</h1>
+
+<p align="center"><strong>Play and inspect streams:</strong> DASH · HLS · DRM · SCTE-35</p>
+
+**PlayProbe** is a web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and adds a **"stats for nerds"** panel showing stream properties, live network and buffer behaviour, the raw manifests, DRM and license details, audio levels and loudness, device capabilities and **SCTE-35 ad markers**, decoded field by field.
 
 ![SCTE-35 view during an ad break](docs/screenshots/scte-dash.png)
 
@@ -142,7 +148,7 @@ In the Cloudflare dashboard go to **Workers & Pages → Create → Import a repo
 | Field | Value |
 | --- | --- |
 | Repository | `garghe/simple-abr-player` |
-| Project name | `simple-abr-player` (must match `"name"` in `wrangler.jsonc`) |
+| Project name | `simple-abr-player` (must match `"name"` in `wrangler.jsonc`; the Worker keeps the repository's name, while the app itself is called PlayProbe) |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 | Preview command | `npx wrangler preview` |
@@ -473,6 +479,7 @@ sequenceDiagram
 │   ├── presets.ts             Test stream list
 │   ├── settings.ts            Saved settings / history
 │   └── styles.css
+├── public/logo.svg, favicon.* App logo, favicons and home-screen icon
 ├── public/samples/scte-demo/  Bundled offline DASH + HLS sample with SCTE-35
 ├── scripts/
 │   ├── make-sample.mjs        Builds the sample with ffmpeg + adds SCTE-35 markers
