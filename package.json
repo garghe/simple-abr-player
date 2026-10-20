@@ -13,7 +13,8 @@
     "test": "vitest run",
     "sample": "node scripts/make-sample.mjs",
     "screenshots": "node scripts/screenshots.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "test:e2e:drm": "node scripts/e2e-drm.mjs"
   },
   "dependencies": {
     "shaka-player": "^5.2.13"

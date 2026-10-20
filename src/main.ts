@@ -2,7 +2,10 @@ import './styles.css';
 import { AudioEngine } from './audio/engine';
 import { PlayerController, describeShakaError } from './player/controller';
 import { AudioOverlay } from './ui/audio/overlay';
-import { presets } from './presets';
+import { drmHint } from './drm/errors';
+import { isDrmConfigured, normaliseDrm } from './drm/settings';
+import { DrmPanel } from './ui/drm/panel';
+import { presets, type Preset } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
 import { snapshot } from './ui/stats/overview';
 import { StatsPanel } from './ui/stats/panel';
@@ -78,6 +81,29 @@ function renderHistory(list = loadHistory()) {
   clear(historyList, list.map((u) => h('option', { value: u })));
 }
 
+// ---------------------------------------------------------------------- DRM
+
+const drmBtn = $('#drm-btn');
+const drmPanel = new DrmPanel($('#drm-panel'), {
+  getUrl: () => urlInput.value.trim(),
+  setUrl: (u) => (urlInput.value = u),
+  toast: (m) => showToast(m),
+});
+function renderDrmButton() {
+  const s = drmPanel.settings;
+  const on = isDrmConfigured(s);
+  drmBtn.innerHTML = `${icons.lock}<span>${on ? ({ auto: 'DRM auto', widevine: 'Widevine', fairplay: 'FairPlay', off: 'DRM' } as const)[s.mode] : 'DRM'}</span>`;
+  drmBtn.classList.toggle('active', on);
+}
+function toggleDrmPanel(open?: boolean) {
+  drmPanel.toggle(open);
+  drmBtn.setAttribute('aria-expanded', String(!$('#drm-panel').hidden));
+}
+drmBtn.addEventListener('click', () => toggleDrmPanel());
+drmPanel.onChange(renderDrmButton);
+renderDrmButton();
+
+const presetByUrl = new Map<string, Preset>();
 const groups = new Map<string, HTMLOptGroupElement>();
 presetSel.append(h('option', { value: '' }, 'Test streams…'));
 for (const p of presets()) {
@@ -88,11 +114,19 @@ for (const p of presets()) {
     presetSel.append(group);
   }
   group.append(h('option', { value: p.url, title: p.notes ?? p.url }, p.name));
+  presetByUrl.set(p.url, p);
 }
 presetSel.addEventListener('change', () => {
   if (!presetSel.value) return;
   urlInput.value = presetSel.value;
+  const preset = presetByUrl.get(presetSel.value);
   presetSel.value = '';
+  if (preset?.drm) {
+    // DRM test streams fill in their license server.
+    const base = normaliseDrm(drmPanel.settings);
+    drmPanel.setSettings({ ...base, ...preset.drm, widevine: { ...base.widevine, ...preset.drm.widevine } } as typeof base);
+    showToast('DRM settings filled in for this test stream');
+  }
   void load(urlInput.value);
 });
 
@@ -138,7 +172,7 @@ const resetAudioOnTrackChange = () => {
 ctrl.on('reset', () => audio.clearStream());
 ctrl.on('loaded', resetAudioOnTrackChange);
 ctrl.on('tracks', resetAudioOnTrackChange);
-const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio);
+const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, () => toggleDrmPanel(true));
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
 
 function renderOverlay() {
@@ -200,7 +234,9 @@ ctrl.on('buffering', (b) => (spinner.hidden = !b));
 ctrl.on('error', (err) => {
   const e = err as { severity?: number } | undefined;
   // Severity 2 = CRITICAL: playback stopped.
-  if (e?.severity === 2) showMessage('Playback error', describeShakaError(err), true);
+  if (e?.severity === 2) {
+    showMessage('Playback error', `${describeShakaError(err)}. ${hintFor(err, ctrl.loadedUrl ?? '')}`, true);
+  }
 });
 
 // ---------------------------------------------------------------------- load
@@ -219,7 +255,9 @@ function hintFor(err: unknown, url: string): string {
     );
   }
   if (code === 4032 || code === 4040) hints.push('The stream uses codecs this browser cannot decode — see the Device tab.');
-  if (code === 6001 || code === 6007) hints.push('The stream is DRM-protected; DRM support is planned for the next iteration.');
+  const drm = drmHint(err);
+  if (drm) hints.push(drm);
+  if (drm || (code && code >= 6000 && code < 7000)) hints.push('Details are in the DRM tab.');
   return hints.join(' ');
 }
 
@@ -240,6 +278,7 @@ async function load(url: string) {
       proxyMode: settings.proxyMode,
       headers: parseHeaders(settings.headers),
       lowLatency: settings.lowLatency,
+      drm: structuredClone(drmPanel.settings),
     });
     renderHistory(pushHistory(url));
     playerEl.classList.add('has-media');
@@ -293,6 +332,13 @@ $('#export-btn').addEventListener('click', () => {
     audioTracks: loaded ? p.getAudioTracks() : [],
     textTracks: loaded ? p.getTextTracks() : [],
     scte35: ctrl.scte.list().map(({ hls: _hls, ...e }) => e),
+    // DRM: what was used and what happened, but never settings, headers or bodies.
+    drm: {
+      active: ctrl.activeDrm(),
+      declared: [...ctrl.drm.declared.values()],
+      keyStatuses: ctrl.drm.keyStatuses,
+      exchanges: ctrl.drm.exchanges.map(({ requestPreview: _q, responsePreview: _r, ...x }) => x),
+    },
     audio: { state: audio.state, decodedChannels: audio.channels, sampleRate: audio.sampleRate, reading: audio.lastReading },
     network: ctrl.network,
     log: ctrl.log,
@@ -311,6 +357,7 @@ proxyStatus.textContent = ctrl.proxyAvailable
   ? `${ctrl.proxyDescription()[0].toUpperCase()}${ctrl.proxyDescription().slice(1)}.`
   : 'No CORS proxy on this server: streams must send CORS headers.';
 proxyStatus.className = ctrl.proxyAvailable ? 'ok' : 'warn';
+drmPanel.proxyAvailable = ctrl.proxyAvailable;
 
 const initial = new URLSearchParams(location.search).get('url');
 if (initial) {

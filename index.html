@@ -26,6 +26,7 @@
         <datalist id="url-history"></datalist>
         <select id="presets" aria-label="Test streams"></select>
         <button type="submit" class="primary" id="load-btn">Load</button>
+        <button type="button" id="drm-btn" class="theme-btn" title="DRM settings (Widevine / FairPlay)" aria-expanded="false"></button>
         <button type="button" id="theme-btn" class="theme-btn"></button>
         <button type="button" id="settings-btn" class="icon-btn" title="Load settings" aria-label="Load settings" aria-expanded="false"></button>
       </form>
@@ -50,6 +51,8 @@
         <label><input type="checkbox" id="autoplay" /> Autoplay after load</label>
       </div>
     </section>
+
+    <section id="drm-panel" class="settings drm-panel" hidden aria-label="DRM settings"></section>
 
     <main class="layout">
       <section class="player-col">

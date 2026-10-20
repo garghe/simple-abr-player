@@ -23,6 +23,7 @@
 import {
   CORS_HEADERS,
   CUSTOM_HEADER_PREFIX,
+  MAX_POST_BYTES,
   type ProxyHealth,
   isMediaContentType,
   isMediaPath,
@@ -60,7 +61,7 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
     return text(JSON.stringify(health), 200, { 'Content-Type': 'application/json' });
   }
   if (!enabled) return text('The CORS proxy is disabled on this deployment (PROXY_ENABLED is not "true").', 404);
-  if (request.method !== 'GET' && request.method !== 'HEAD') return text('Method not allowed', 405);
+  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'POST') return text('Method not allowed', 405);
 
   const target = parseProxyPath(url.pathname + url.search);
   if (!target) return text('Expected /__proxy/<http|https>/<host>/<path>', 400);
@@ -70,8 +71,15 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
     return text(`Host ${target.hostname} is not in PROXY_ALLOWED_HOSTS`, 403);
   }
 
+  // POST = DRM license request: small body, never media.
+  let body: ArrayBuffer | undefined;
+  if (request.method === 'POST') {
+    body = await request.arrayBuffer();
+    if (body.byteLength > MAX_POST_BYTES) return text('Request body too large for the proxy (license requests only)', 413);
+  }
+
   // Guardrail: refuse segments before fetching anything (no origin traffic).
-  if (!segments && isMediaPath(target)) {
+  if (!segments && request.method !== 'POST' && isMediaPath(target)) {
     return text('Media segments are not proxied on this deployment (PROXY_SEGMENTS is not "true").', 403);
   }
 
@@ -86,7 +94,7 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
 
   let upstream: Response;
   try {
-    upstream = await fetch(target.toString(), { method: request.method, headers, redirect: 'manual' });
+    upstream = await fetch(target.toString(), { method: request.method, headers, body, redirect: 'manual' });
   } catch (err) {
     return text(`Proxy error fetching ${target}: ${err instanceof Error ? err.message : String(err)}`, 502);
   }

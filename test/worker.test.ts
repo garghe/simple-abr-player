@@ -88,4 +88,31 @@ describe('Cloudflare Worker', () => {
     expect((await worker.fetch(req('/__proxy/https/cdn.example.com/a.mpd'), e)).status).toBe(403);
     expect((await worker.fetch(req('/__proxy/https/x.akamaized.net/a.mpd'), e)).status).toBe(200);
   });
+
+  it('forwards DRM license POSTs with their body and content type', async () => {
+    const fetchMock = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'application/octet-stream' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await worker.fetch(
+      req('/__proxy/https/license.example.com/widevine?token=1', {
+        method: 'POST',
+        body: new Uint8Array([9, 8, 7]),
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Proxy-Header-Authorization': 'Bearer t' },
+      }),
+      env({ PROXY_ALLOWED_HOSTS: 'license.example.com' }),
+    );
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://license.example.com/widevine?token=1');
+    expect(init.method).toBe('POST');
+    expect(new Uint8Array(init.body as ArrayBuffer)).toEqual(new Uint8Array([9, 8, 7]));
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer t');
+    expect(new Headers(init.headers).get('content-type')).toBe('application/octet-stream');
+  });
+
+  it('refuses oversized POST bodies', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x')));
+    const res = await worker.fetch(req('/__proxy/https/license.example.com/l', { method: 'POST', body: new Uint8Array(300 * 1024) }), env());
+    expect(res.status).toBe(413);
+  });
 });

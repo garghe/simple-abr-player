@@ -1,7 +1,15 @@
+import { widevineLevelName } from '../../drm/settings';
 import type { PlayerController } from '../../player/controller';
 import { drawChart } from '../chart';
 import { badge, h, kvTable } from '../dom';
 import { clock, formatBitrate, formatBytes, formatPrecise, formatTime } from '../format';
+
+function drmLabel(ctrl: PlayerController): string {
+  const d = ctrl.activeDrm();
+  if (!d) return 'clear';
+  const level = d.name === 'Widevine' ? widevineLevelName(d.videoRobustness).split(' ')[0] : '';
+  return `${d.name}${level ? ` ${level}` : ''}`;
+}
 
 export interface Snapshot {
   format: string;
@@ -88,7 +96,7 @@ export function snapshot(ctrl: PlayerController): Snapshot {
     audioTracks: loaded ? p.getAudioTracks().length : 0,
     textTracks: loaded ? p.getTextTracks().length : 0,
     variants: variants.length,
-    drm: loaded ? p.keySystem() || 'clear' : '—',
+    drm: loaded ? drmLabel(ctrl) : '—',
   };
 }
 
@@ -108,7 +116,7 @@ export class OverviewTab {
     this.table.replaceChildren(
       h('h3', null, 'Stream'),
       kvTable([
-        ['Format', [badge(s.format, 'accent'), ' ', badge(s.live ? 'LIVE' : 'VOD', s.live ? 'live' : ''), ' ', badge(s.drm, s.drm === 'clear' ? 'ok' : 'warn')]],
+        ['Format', [badge(s.format, 'accent'), ' ', badge(s.live ? 'LIVE' : 'VOD', s.live ? 'live' : ''), ' ', badge(s.drm, s.drm === 'clear' ? 'ok' : 'accent')]],
         ['URL', h('span', { class: 'mono break' }, s.url ?? '—')],
         ['Fetched via', s.url ? (s.proxied ? 'Local CORS proxy' : 'Direct (browser)') : '—'],
         ['Tracks', `${s.variants} variants · ${s.audioTracks} audio · ${s.textTracks} text`],

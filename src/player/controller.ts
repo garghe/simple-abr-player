@@ -1,6 +1,11 @@
 import shaka from 'shaka-player';
 import { parseHlsCues, type HlsCue } from '../scte/hls-cues';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
+import { DrmMonitor, preview } from '../drm/monitor';
+import { initProtectionToDeclared, parseHlsProtection, parseMpdProtection, scanInitSegment } from '../drm/inspect';
+import { WIDEVINE_ROBUSTNESS, isDrmConfigured, type DrmSettings, type LicenseFormat } from '../drm/settings';
+import { buildLicenseRequest, fairPlayContentId, fromBase64, looksLikeBase64, parseLicenseResponse } from '../drm/transform';
+import { parseHeaders } from '../settings';
 import { detectProxy, fromProxyUrl, isProxied, routeUri, type ProxyInfo, type ProxyMode } from './proxy';
 
 export type StreamFormat = 'DASH' | 'HLS' | 'unknown';
@@ -11,7 +16,18 @@ export interface LoadOptions {
   headers: Record<string, string>;
   lowLatency: boolean;
   startTime?: number;
+  drm?: DrmSettings;
 }
+
+const WIDEVINE = 'com.widevine.alpha';
+const FAIRPLAY = 'com.apple.fps';
+const isFairPlay = (ks: string | undefined | null) => Boolean(ks && ks.startsWith('com.apple.fps'));
+
+const toBytes = (d: ArrayBuffer | ArrayBufferView): Uint8Array =>
+  d instanceof ArrayBuffer ? new Uint8Array(d) : new Uint8Array(d.buffer, d.byteOffset, d.byteLength);
+
+/** True when this browser has a native HLS player (Safari). */
+const hasNativeHls = () => document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '';
 
 export interface NetworkEntry {
   id: number;
@@ -89,6 +105,7 @@ export class PlayerController extends EventTarget {
   readonly log: LogEntry[] = [];
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
+  readonly drm = new DrmMonitor();
 
   proxy: ProxyInfo | null = null;
   usingProxy = false;
@@ -98,6 +115,7 @@ export class PlayerController extends EventTarget {
   /** Receives audio init/media segment bytes (for the audio meters). */
   onAudioSegment: ((kind: 'init' | 'media', streamId: number, data: Uint8Array, startTime: number) => void) | null = null;
   private options: LoadOptions | null = null;
+  private exchangeByRequest = new WeakMap<object, import('../drm/monitor').LicenseExchange>();
   private warnedSegmentHosts = new Set<string>();
   private netSeq = 0;
   private tickTimer: number | undefined;
@@ -145,11 +163,71 @@ export class PlayerController extends EventTarget {
   async load(options: LoadOptions): Promise<void> {
     this.options = options;
     this.resetSession();
+    // Start from Shaka's defaults every time so DRM settings of the previous
+    // stream never leak into the next one.
+    this.player.resetConfiguration();
     this.player.configure({
       streaming: { lowLatencyMode: options.lowLatency },
       // Surface every emsg box (HLS fMP4 and DASH without InbandEventStream too).
       mediaSource: { dispatchAllEmsgBoxes: true },
     });
+    const fairPlay = this.applyDrm(options.drm);
+    if (fairPlay && options.drm!.fairplay.playback !== 'native' && hasNativeHls()) {
+      // Safari: try Shaka's own (MSE) playback first, so every stat keeps working.
+      try {
+        await this.loadWithProxyFallback(options, 'mse');
+      } catch (err) {
+        const category = (err as shaka.util.Error)?.category;
+        const fallback = options.drm!.fairplay.playback === 'auto' && (category === 6 || category === 3 || category === 4);
+        if (!fallback) throw err;
+        this.warn(`${describeShakaError(err)} — retrying FairPlay with Safari's native HLS player (fewer stats available)`);
+        this.resetSession();
+        await this.loadWithProxyFallback(options, 'native');
+      }
+      return;
+    }
+    await this.loadWithProxyFallback(options, fairPlay && hasNativeHls() ? 'native' : null);
+  }
+
+  /** Configures Shaka for the DRM settings. Returns true when FairPlay is set up. */
+  private applyDrm(drm: DrmSettings | undefined): boolean {
+    if (!drm || !isDrmConfigured(drm)) return false;
+    const servers: Record<string, string> = {};
+    const advanced: Record<string, Partial<shaka.extern.AdvancedDrmConfiguration>> = {};
+    const useWv = drm.mode === 'auto' || drm.mode === 'widevine';
+    const useFp = drm.mode === 'auto' || drm.mode === 'fairplay';
+    const wv = drm.widevine;
+    const fp = drm.fairplay;
+    if (useWv && wv.licenseUrl.trim()) {
+      servers[WIDEVINE] = wv.licenseUrl.trim();
+      const r = WIDEVINE_ROBUSTNESS[wv.level];
+      advanced[WIDEVINE] = { videoRobustness: r.video, audioRobustness: r.audio };
+    }
+    if (drm.testKeySystem) servers[drm.testKeySystem.keySystem] = drm.testKeySystem.licenseUrl;
+    let fairPlay = false;
+    if (useFp && fp.licenseUrl.trim()) {
+      servers[FAIRPLAY] = fp.licenseUrl.trim();
+      advanced[FAIRPLAY] = fp.certificateData
+        ? { serverCertificate: fromBase64(fp.certificateData) }
+        : { serverCertificateUri: fp.certificateUrl.trim() };
+      fairPlay = true;
+    }
+    this.player.configure({
+      drm: {
+        servers,
+        advanced: advanced as Record<string, shaka.extern.AdvancedDrmConfiguration>,
+        preferredKeySystems: drm.mode === 'fairplay' ? [FAIRPLAY] : drm.mode === 'widevine' ? [WIDEVINE] : [],
+      },
+    });
+    this.info(`DRM: ${Object.keys(servers).map((k) => (k === WIDEVINE ? 'Widevine' : isFairPlay(k) ? 'FairPlay' : k)).join(' + ')} configured`);
+    return fairPlay;
+  }
+
+  private async loadWithProxyFallback(options: LoadOptions, safari: 'mse' | 'native' | null) {
+    // Shaka's default would hand FairPlay streams to a native HLS player; only
+    // do that when we explicitly chose the native path.
+    this.player.configure('streaming.useNativeHlsForFairPlay', safari === 'native');
+    if (safari) this.drm.safariPath = safari;
     const wantProxy = options.proxyMode === 'always' && this.proxyAvailable;
     if (options.proxyMode === 'always' && !this.proxyAvailable) {
       this.warn('Proxy mode is "always" but the local proxy is not available (static build?). Loading directly.');
@@ -163,6 +241,7 @@ export class PlayerController extends EventTarget {
       if (!canRetry) throw err;
       this.warn(`${describeShakaError(err)} — retrying through the local CORS proxy`);
       this.resetSession();
+      if (safari) this.drm.safariPath = safari;
       await this.attempt(options, true);
     }
   }
@@ -198,6 +277,7 @@ export class PlayerController extends EventTarget {
     this.scte.clear();
     this.format = 'unknown';
     this.usingProxy = false;
+    this.drm.reset();
     this.emit('network');
     this.emit('documents');
     this.emit('reset');
@@ -210,14 +290,33 @@ export class PlayerController extends EventTarget {
 
     const RT = shaka.net.NetworkingEngine.RequestType;
     net.registerRequestFilter((type, request) => {
-      const headers = this.options?.headers ?? {};
+      const drm = this.options?.drm;
+      const isDrmRequest = type === RT.LICENSE || type === RT.SERVER_CERTIFICATE;
+      // Stream headers go to stream requests; license headers to DRM requests.
+      const headers = isDrmRequest ? parseHeaders(drm?.headers ?? '') : (this.options?.headers ?? {});
       // Guardrail: only manifests/playlists (and the DASH timing source) are
-      // proxied unless the proxy explicitly allows segments.
-      const isManifest = type === RT.MANIFEST || type === RT.TIMING;
+      // proxied unless the proxy explicitly allows segments. License and
+      // certificate requests use the proxy only when the DRM option asks for it.
+      const isManifest = type === RT.MANIFEST || type === RT.TIMING || isDrmRequest;
+      const useProxy = isDrmRequest ? Boolean(drm?.useProxy && this.proxy) : this.usingProxy;
       request.uris = request.uris.map((u) =>
-        routeUri(u, { useProxy: this.usingProxy, isManifest, segmentsAllowed: this.proxy?.segments ?? false }),
+        routeUri(u, { useProxy, isManifest, segmentsAllowed: this.proxy?.segments ?? false }),
       );
       const proxied = request.uris.some((u) => isProxied(u));
+      if (type === RT.LICENSE && drm) this.prepareLicenseRequest(request, drm, Object.keys(headers), proxied);
+      else if (type === RT.SERVER_CERTIFICATE) {
+        const x = this.drm.start({
+          kind: 'certificate',
+          keySystem: 'FairPlay',
+          url: fromProxyUrl(request.uris[0] ?? ''),
+          proxied,
+          requestHeaders: Object.keys(headers),
+          requestFormat: 'GET',
+          requestBytes: 0,
+          requestPreview: '',
+        });
+        this.exchangeByRequest.set(request, x);
+      }
       for (const [k, v] of Object.entries(headers)) {
         // Through the proxy, custom headers are forwarded as X-Proxy-Header-*.
         request.headers[proxied ? `X-Proxy-Header-${k}` : k] = v;
@@ -225,8 +324,13 @@ export class PlayerController extends EventTarget {
     });
 
     net.registerResponseFilter((type, response, context) => {
+      if (type === RT.LICENSE || type === RT.SERVER_CERTIFICATE) this.handleDrmResponse(type, response);
       const uri = fromProxyUrl(response.uri);
       const advanced = context?.type;
+      if (type === RT.SEGMENT && advanced === shaka.net.NetworkingEngine.AdvancedRequestType.INIT_SEGMENT) {
+        const found = initProtectionToDeclared(scanInitSegment(toBytes(response.data)));
+        if (found.length) this.drm.addDeclared(found);
+      }
       const typeName =
         advanced !== undefined && advanced !== null ? ADVANCED_TYPE_NAMES[advanced] : REQUEST_TYPE_NAMES[type];
       const bytes = response.data.byteLength;
@@ -263,6 +367,15 @@ export class PlayerController extends EventTarget {
       };
       if (ev.aborted) return;
       const failedUri = fromProxyUrl(ev.request?.uris?.[0] ?? '');
+      const exchange = ev.request ? this.exchangeByRequest.get(ev.request) : undefined;
+      if (exchange?.pending) {
+        const body = ev.error?.data?.[2];
+        this.drm.finish(exchange, {
+          status: ev.httpResponseCode || null,
+          responsePreview: typeof body === 'string' && body ? body.slice(0, 1500) : '',
+          error: ev.httpResponseCode ? `HTTP ${ev.httpResponseCode}` : ev.error ? describeShakaError(ev.error) : 'request failed (network or CORS)',
+        });
+      }
       if (
         ev.requestType === shaka.net.NetworkingEngine.RequestType.SEGMENT &&
         this.usingProxy &&
@@ -289,6 +402,88 @@ export class PlayerController extends EventTarget {
     }) as EventListener);
   }
 
+  // ------------------------------------------------------------------- DRM
+
+  private licenseFormat(drm: DrmSettings, keySystem: string | undefined): LicenseFormat {
+    return isFairPlay(keySystem) ? drm.fairplay : drm.widevine;
+  }
+
+  /** Applies the generic request format and records the exchange. */
+  private prepareLicenseRequest(request: shaka.extern.Request, drm: DrmSettings, headerNames: string[], proxied: boolean) {
+    const keySystem = request.drmInfo?.keySystem ?? '';
+    const fmt = this.licenseFormat(drm, keySystem);
+    const challenge = request.body ? toBytes(request.body) : new Uint8Array();
+    const fp = isFairPlay(keySystem);
+    const contentId = fp
+      ? fairPlayContentId(request.initData ?? null, request.initDataType ?? null, drm.fairplay.contentId, drm.fairplay.customContentId)
+      : '';
+    const keyId = request.drmInfo?.keyIds ? [...request.drmInfo.keyIds][0] ?? '' : '';
+    const x = this.drm.start({
+      kind: 'license',
+      keySystem: fp ? 'FairPlay' : keySystem === WIDEVINE ? 'Widevine' : keySystem.includes('clearkey') ? 'ClearKey' : keySystem,
+      url: fromProxyUrl(request.uris[0] ?? ''),
+      proxied,
+      requestHeaders: headerNames,
+      requestFormat: fmt.requestFormat + (contentId ? ` · content ID ${contentId}` : ''),
+      requestBytes: challenge.byteLength,
+      requestPreview: '',
+    });
+    this.exchangeByRequest.set(request, x);
+    try {
+      const built = buildLicenseRequest(challenge, fmt, { contentId, keyId });
+      request.body = built.body;
+      if (built.contentType) request.headers['Content-Type'] = built.contentType;
+      x.requestBytes = built.body.byteLength;
+      x.requestPreview = fmt.requestFormat === 'raw' ? `${challenge.byteLength} B binary message from the DRM module` : new TextDecoder().decode(built.body).slice(0, 1500);
+    } catch (err) {
+      this.drm.finish(x, { error: `Request template error: ${err instanceof Error ? err.message : err}` });
+      throw err;
+    }
+  }
+
+  /** Unwraps the license (or certificate) and records the exchange. */
+  private handleDrmResponse(type: number, response: shaka.extern.Response) {
+    const RT = shaka.net.NetworkingEngine.RequestType;
+    const x = this.exchangeByRequest.get(response.originalRequest);
+    const data = toBytes(response.data);
+    const base = { status: response.status ?? 200, ms: response.timeMs ?? null, responseBytes: data.byteLength };
+    if (type === RT.SERVER_CERTIFICATE) {
+      // Certificates are served as binary or as base64 text: accept both.
+      const text = new TextDecoder().decode(data.subarray(0, 64));
+      const isB64 = looksLikeBase64(new TextDecoder().decode(data).trim()) && !/[ -]/.test(text);
+      if (isB64) response.data = fromBase64(new TextDecoder().decode(data)).buffer as ArrayBuffer;
+      if (x) this.drm.finish(x, { ...base, responsePreview: `${data.byteLength} B certificate`, detected: isB64 ? 'base64' : 'binary' });
+      return;
+    }
+    const drm = this.options?.drm;
+    if (!drm) return;
+    const fmt = this.licenseFormat(drm, response.originalRequest.drmInfo?.keySystem);
+    try {
+      const parsed = parseLicenseResponse(data, fmt);
+      response.data = parsed.license.slice().buffer as ArrayBuffer;
+      if (x) this.drm.finish(x, { ...base, responsePreview: preview(data), detected: parsed.detected });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (x) this.drm.finish(x, { ...base, responsePreview: preview(data), error: `Could not read the license: ${message}` });
+      throw err;
+    }
+  }
+
+  /** Key system, security level and scheme in use (null for clear streams). */
+  activeDrm(): { keySystem: string; name: string; videoRobustness: string; audioRobustness: string; scheme: string; licenseUrl: string } | null {
+    const info = this.loadedUrl ? this.player.drmInfo() : null;
+    if (!info || !info.keySystem) return null;
+    const name = info.keySystem === WIDEVINE ? 'Widevine' : isFairPlay(info.keySystem) ? 'FairPlay' : info.keySystem.includes('clearkey') ? 'ClearKey' : info.keySystem;
+    return {
+      keySystem: info.keySystem,
+      name,
+      videoRobustness: info.videoRobustness,
+      audioRobustness: info.audioRobustness,
+      scheme: info.encryptionScheme,
+      licenseUrl: fromProxyUrl(info.licenseServerUri),
+    };
+  }
+
   private captureManifest(uri: string, data: ArrayBuffer | ArrayBufferView, advanced?: number | null) {
     const buf = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     const text = new TextDecoder().decode(buf);
@@ -298,6 +493,9 @@ export class PlayerController extends EventTarget {
     else if (text.startsWith('#EXTM3U')) kind = text.includes('#EXT-X-STREAM-INF') ? 'Master playlist' : 'Media playlist';
     this.documents.set(uri, { uri, kind, text, at: new Date(), size: buf.byteLength });
     this.emit('documents');
+
+    const protection = kind === 'MPD' ? parseMpdProtection(text) : kind === 'Manifest' ? [] : parseHlsProtection(text);
+    if (protection.length) this.drm.addDeclared(protection);
 
     if (kind === 'Media playlist') {
       const info = parseHlsCues(text, uri);
@@ -343,6 +541,16 @@ export class PlayerController extends EventTarget {
     on('stalldetected', () => this.warn('Stall detected'));
     on('gapjumped', () => this.warn('Gap jumped'));
     on('manifestupdated', () => this.scte.resolvePending());
+    on('keystatuschanged', () => {
+      this.drm.keyStatuses = this.player.getKeyStatuses();
+      this.drm.emit();
+    });
+    on('expirationupdated', () => {
+      this.drm.expiration = this.player.getExpiration();
+      this.drm.emit();
+    });
+    on('drmsessionupdate', () => this.drm.emit());
+    this.drm.onChange(() => this.emit('drm'));
 
     on('timelineregionadded', (e) => {
       const region = (e as unknown as { detail: shaka.extern.TimelineRegionInfo }).detail;

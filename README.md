@@ -1,8 +1,6 @@
 # Simple ABR Player
 
-A web player for **clear (unencrypted) MPEG-DASH and HLS streams**, built for stream engineers. It plays any DASH or HLS URL and adds a **"stats for nerds"** panel showing stream properties, live network and buffer behaviour, the raw manifests, device capabilities and **SCTE-35 ad markers**, decoded field by field.
-
-DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groundwork is already in place: there is a DRM capability check, and custom request headers are supported.
+A web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and adds a **"stats for nerds"** panel showing stream properties, live network and buffer behaviour, the raw manifests, DRM and license details, audio levels and loudness, device capabilities and **SCTE-35 ad markers**, decoded field by field.
 
 ![SCTE-35 view during an ad break](docs/screenshots/scte-dash.png)
 
@@ -18,6 +16,7 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 - [Screenshots](#screenshots)
 - [SCTE-35 support](#scte-35-support)
 - [Audio levels and loudness](#audio-levels-and-loudness)
+- [DRM: Widevine and FairPlay](#drm-widevine-and-fairplay)
 - [Architecture](#architecture)
 - [Project structure](#project-structure)
 - [Testing](#testing)
@@ -42,6 +41,8 @@ DRM (Widevine, PlayReady, FairPlay) is planned for the next iteration. The groun
 | **Stats: SCTE-35** | Every ad marker the app finds, with time, source, OUT/IN direction, a decoded summary and duration. Click a marker to see its full decoded contents and CRC check. Also shows whether you're **in an ad break right now** (with countdown), and includes a **manual decoder** for pasted base64 or hex messages. |
 | **Stats: Network** | Every manifest, playlist and segment request: status, size, time, throughput, errors, and whether it went through the proxy. |
 | **Stats: Manifest** | The raw MPD and every HLS playlist exactly as fetched (refreshes for live streams), with SCTE and ad-related lines highlighted. |
+| **DRM** | **Widevine** (Chrome, Edge, Firefox, Android) and **FairPlay** (Safari). Works with any license server: license URL, request headers and, if needed, generic request/response formats, with no provider-specific settings. Saved profiles. License requests can go through the CORS proxy. |
+| **Stats: DRM** | DRM system and Widevine security level in use, protection declared by the stream (systems, key IDs, decoded PSSH, HLS key tags), live key status per key ID, and every license and certificate request with timing and the raw request and response. |
 | **Stats: Device** | Codec support (Media Source Extensions plus a 1080p smoothness check), DRM support and security levels (Widevine, PlayReady, FairPlay, ClearKey), HDCP version, HDR display and colour range. |
 | **Stats: Log** | Loading steps, quality switches, track changes, stalls and errors. |
 | **Light / dark theme** | The header button cycles **System** (follows your OS setting), **Light** and **Dark**. The choice is remembered. The video area stays dark in both themes, as video players normally do. |
@@ -81,6 +82,7 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm test` | Runs the unit tests (Vitest). |
 | `npm run typecheck` | Checks TypeScript types only. |
 | `npm run sample` | Regenerates the bundled SCTE-35 sample (needs `ffmpeg`). |
+| `npm run test:e2e:drm` | Runs the DRM pipeline end to end in headless Chromium with ClearKey and a local test license server. Add `-- --shots` to refresh the DRM screenshots. |
 | `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
 | `npm run screenshots` | Regenerates the README screenshots (needs Playwright's Chromium). |
 
@@ -170,6 +172,7 @@ To turn it on, set these variables in **Worker → Settings → Variables and Se
 | --- | --- | --- |
 | `PROXY_ENABLED` | `true` | Turns `/__proxy/…` on. |
 | `PROXY_ALLOWED_HOSTS` | e.g. `*.akamaized.net,cdn.example.com` | Comma-separated origin hosts the proxy may fetch (`*.` matches subdomains). **Strongly recommended.** Other hosts get `403`. Empty means any host, so only leave it empty with **Protect with Cloudflare Access** turned on, so that only people you allow can use the site. |
+| | | License requests (POST) are allowed through the proxy, up to 256 KB per request, for the DRM option *Send license requests through the CORS proxy*. They also need their host in this list. |
 | `PROXY_SEGMENTS` | `false` (default) | **Segment guardrail.** Only manifests and playlists go through the Worker; video, audio, subtitle and init segments are always fetched directly by the browser. Set `true` only if the segment CDN itself blocks CORS (then every segment costs one Worker request). |
 
 > **Note:** variables set in the dashboard are overwritten by the values in `wrangler.jsonc` on the next deploy from Git. To keep dashboard values, either edit `wrangler.jsonc` in the repo (recommended), or remove the `"vars"` block.
@@ -225,6 +228,12 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 
 **Device**: codec, DRM and display capabilities.
 ![Device](docs/screenshots/device.png)
+
+**DRM settings**: Widevine filled in by the Widevine test-stream preset; FairPlay is inactive because the mode is set to Widevine.
+![DRM settings](docs/screenshots/drm-settings.png)
+
+**DRM tab**: encrypted playback with key system, scheme, declared protection, key status and a license request (here the ClearKey end-to-end test, with a JSON-wrapped request sent through the proxy).
+![DRM tab](docs/screenshots/drm-tab.png)
 
 **Settings and Log**: CORS proxy mode, custom headers, low-latency mode.
 ![Settings](docs/screenshots/settings.png)
@@ -295,6 +304,63 @@ The measurement code is checked against the EBU reference signals (Tech 3341 and
 
 ---
 
+## DRM: Widevine and FairPlay
+
+Open the **DRM** panel from the header (the lock button). The button shows the active mode.
+
+| | Widevine | FairPlay |
+| --- | --- | --- |
+| Browsers | Chrome, Edge, Firefox, Android | Safari on macOS, iOS and iPadOS |
+| Streams | DASH, and HLS with fMP4 segments (`cenc` or `cbcs`) | HLS (`cbcs`, `skd://` keys) |
+| You need | License URL | License URL and the **FairPlay certificate** (URL or file) |
+
+**Mode:** *Off*, *Auto* (configure both; the browser uses whichever it supports, so one setting works in Chrome and Safari), *Widevine* or *FairPlay*.
+
+### Settings
+
+- **License URL** (with any query string) and **license request headers** (`Name: value` per line, e.g. `Authorization: Bearer …`). The headers are also sent with the FairPlay certificate request.
+- **Widevine security level:** *Auto* (best available), *L1 only* (hardware) or *L3 only* (software). The DRM tab shows what was obtained.
+- **FairPlay certificate:** a URL, or upload the file. Binary (`.der`/`.cer`) or base64 both work. An uploaded file overrides the URL.
+- **FairPlay content ID** (the "asset ID" many servers want): from the `skd://` key URI (host part, the default, or the whole URI), the key ID, or a custom value.
+- **Safari playback:** *Auto* plays with Shaka first, keeping every stat, and falls back to Safari's native HLS player if that fails. *Player only* never falls back. *Native* uses Safari's player directly (fewer stats: no segment log, playlist ad markers or direct audio metering).
+- **Send license requests through the CORS proxy:** for license servers that don't allow browser access. On Cloudflare the license host must also be in `PROXY_ALLOWED_HOSTS`.
+
+### Any license server, without provider presets
+
+Most servers take the DRM module's message as-is and return the license as-is, so the URL plus headers is enough. For the rest, **Advanced: request & response format** covers the common variations:
+
+| | Options |
+| --- | --- |
+| **Request body** | *Raw* (standard) · *Base64 text* · *Form* (FairPlay, e.g. `spc={{spc}}&assetId={{contentId}}`) · *JSON template*, e.g. `{"spc":"{{spc}}","assetId":"{{contentId}}"}` |
+| **Placeholders** | `{{challenge}}` / `{{spc}}` (the message, base64), `{{contentId}}`, `{{keyId}}` |
+| **Response** | *Auto-detect* (default) · *Raw* · *Base64* · *`<ckc>…</ckc>`* · *JSON field* (dotted path, e.g. `data.license`) |
+
+Auto-detect recognises raw binary licenses, base64 text, `<ckc>` tags, and JSON with a `license`, `ckc`, `CkcMessage` or `License` field. If a server still doesn't work, the **DRM tab** shows the exact request body sent and the raw response, which usually reveals the expected format.
+
+### Profiles
+
+**Save as…** stores the current DRM settings, plus the stream URL, under a name such as "QA – FairPlay". Pick it from **Profile** to restore both. Profiles stay in this browser.
+
+### Privacy of tokens
+
+DRM settings, headers and tokens are only sent to the license and certificate servers. They're **never** put into *Copy link* URLs or *Export JSON*: the export includes which DRM was used, key statuses and the request timing, but no settings, header values or request/response bodies. Settings are kept after a reload only if you tick *Remember these settings on this browser* (stored in this browser only).
+
+### Testing DRM
+
+- **Widevine:** pick *Angel One — DASH/HLS Widevine* from **Test streams…** in Chrome or Edge. It fills in Google's public Widevine test license server.
+- **FairPlay:** there are no public FairPlay test streams, because the certificate comes from Apple via your DRM provider. Use your own stream, certificate and license URL in Safari.
+- **Automated:** headless Chromium has no Widevine or FairPlay, so `npm run test:e2e:drm` uses **ClearKey**, which goes through the same browser DRM (EME) and license path. It plays Shaka's public encrypted *Angel One ClearKey* stream against a local test license server, and checks:
+  - the standard license exchange and key status
+  - a JSON-wrapped request and response with an auth header, sent through the proxy
+  - that a wrong token gives HTTP 403 with a clear message
+  - that Widevine settings entered in the UI reach the player
+
+Notes:
+- Audio meters can't decode encrypted segments directly, so they fall back to the browser's audio output. With hardware-protected playback (Widevine L1, usually FairPlay) browsers return silence, so levels may be unavailable.
+- Offline or persistent licenses are not supported (out of scope).
+
+---
+
 ## Architecture
 
 The app is plain TypeScript with no UI framework, built with **Vite**. Playback uses **[Shaka Player](https://github.com/shaka-project/shaka-player)**: one engine for both DASH and HLS, and one that already supports Widevine, PlayReady and FairPlay for the DRM iteration.
@@ -342,6 +408,11 @@ flowchart LR
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
 | `src/ui/theme.ts` | System / Light / Dark toggle. Colours are CSS custom properties switched by `data-theme` on `<html>` (or the OS setting in System mode); a small inline script in `index.html` applies the saved theme before the page first appears. |
+| `src/drm/settings.ts` | DRM settings model (generic: URLs, headers, formats), Widevine robustness levels, profiles and storage. |
+| `src/drm/transform.ts` | Generic license request wrapping (raw / base64 / form / JSON template) and response unwrapping (auto-detect / base64 / `<ckc>` / JSON field), FairPlay content ID. |
+| `src/drm/inspect.ts` | Reads declared protection: PSSH boxes (incl. Widevine PSSH data), MPD `ContentProtection`, HLS `EXT-X-KEY`, and `pssh`/`schm`/`tenc` in init segments. |
+| `src/drm/monitor.ts`, `src/drm/errors.ts` | License/certificate exchange log, key statuses, expiry; plain-language explanations of DRM errors and key statuses. |
+| `src/ui/drm/panel.ts`, `src/ui/stats/drm.ts` | DRM settings panel with profiles, and the DRM tab. |
 | `src/audio/dsp.ts` | Measurement maths shared by both sources: BS.1770 K-weighting filters, 4× true-peak interpolator, and 100 ms measurement blocks (peak, RMS, K-weighted energy, correlation sums). |
 | `src/audio/loudness.ts` | Turns blocks into momentary, short-term, gated integrated loudness and LRA (fixed-size histograms, so memory stays constant), plus peak hold; the EBU R128 / ATSC A/85 definitions. |
 | `src/audio/mp4.ts` | Minimal fMP4 reader: codec configuration from audio init segments (Opus, AAC, FLAC, AC-3/E-AC-3), sample ranges from media segments. |
@@ -396,6 +467,7 @@ sequenceDiagram
 │   ├── player/                PlayerController (Shaka wrapper), proxy URL helpers
 │   ├── scte/                  SCTE-35 decoder, HLS cue parser, marker monitor
 │   ├── audio/                 Audio meters: DSP, loudness, fMP4 reader, WebCodecs + Web Audio sources
+│   ├── drm/                   DRM settings, license request/response formats, protection parsing, monitor
 │   ├── ui/                    Controls, seek bar, chart, helpers
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
 │   ├── presets.ts             Test stream list
@@ -428,6 +500,7 @@ The unit tests cover:
 - **Cloudflare Worker**: static files passed through, proxy off by default, health check and capabilities, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking, and the segment guardrail (blocked by extension without contacting the origin, blocked by Content-Type, playlists still allowed, `PROXY_SEGMENTS=true` override).
 - **Loudness**: BS.1770-4 K-weighting coefficients; EBU Tech 3341 tests 1, 2, 3 and 5 (integrated, momentary, short-term, relative and absolute gates); 5.1 surround weighting and LFE exclusion; EBU Tech 3342 loudness range; true peak against an inter-sample-peak signal; correlation.
 - **fMP4 audio parsing** on the bundled sample: Opus stereo and 5.1 configuration (OpusHead with channel mapping), video init ignored, sample tables.
+- **DRM**: request formats (raw, base64, JSON template with escaping, form), response formats (auto-detect of binary, base64, `<ckc>`, JSON fields; ClearKey passed through), FairPlay content ID from `skd://` (UTF-8 and UTF-16), Widevine and ClearKey PSSH decoding from real streams, MPD and HLS key tags, init-segment boxes, error messages. The Worker tests also cover license POST forwarding and the size limit. The end-to-end DRM run is `npm run test:e2e:drm` (see [Testing DRM](#testing-drm)).
 - **Request routing**: manifests proxied, segments sent directly, relative segment URLs taken back out of the proxy, own-site files never proxied.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
@@ -476,6 +549,12 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | Nothing plays from a deployed `https://` site | The stream is `http://` (blocked as mixed content) or doesn't allow browser access. Run locally with `npm run dev`. |
 | Proxy can't reach the origin behind a corporate proxy | Set `HTTPS_PROXY` (and `NODE_EXTRA_CA_CERTS` if your company inspects HTTPS) before `npm run dev`. |
 | On Cloudflare, a stream fails with a CORS error and the app doesn't offer the proxy | The proxy is off on the Worker. Set `PROXY_ENABLED=true` (and `PROXY_ALLOWED_HOSTS`), then redeploy. Check with `/__proxy/health`. |
+| *This browser cannot use the requested DRM* (6001) | Widevine needs Chrome, Edge or Firefox; FairPlay needs Safari. Also try Widevine security level *Auto* or *L3*: L1 needs a hardware-backed device. |
+| License request fails with HTTP 401/403 | Wrong or missing token: check the license request headers (or the JSON template). The DRM tab shows the server's reply. |
+| License request fails with no HTTP status | Usually CORS: tick *Send license requests through the CORS proxy* (and, on Cloudflare, add the license host to `PROXY_ALLOWED_HOSTS`). |
+| *The DRM module rejected the license* (6008) | The response isn't in the expected form: choose a different *Response* format, and compare with the raw response in the DRM tab. |
+| FairPlay: *needs a certificate* (6015) or *certificate rejected* (6004) | Add the certificate URL or file; make sure it belongs to this license server. |
+| A key shows *output-restricted* | Output protection (HDCP) blocks that rendition on this display or connection; the player skips it. |
 | On Cloudflare the manifest loads but segments fail; the Log says *"This proxy only carries manifests/playlists"* | The segment CDN blocks CORS. Enable CORS on that CDN, use `npm run dev`, or set `PROXY_SEGMENTS=true` (one Worker request per segment). |
 | Proxy returns `403 … not in PROXY_ALLOWED_HOSTS` | Add the origin's host (or `*.domain`) to `PROXY_ALLOWED_HOSTS`. |
 | Audio tab says *downmixed by browser* for a 5.1 track | The stream couldn't be decoded directly (see *Measured from*), so the meters use the browser's output, which Chrome mixes to your speakers' channel count. With fMP4 Opus/AAC audio this doesn't happen. |
@@ -486,7 +565,7 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 
 ## Roadmap
 
-- **DRM (next iteration):** license server URLs per key system, license request headers, FairPlay certificate, and DRM session and key status in the stats panel. Builds on Shaka's DRM support and the existing Device tab.
+- PlayReady (same generic license handling), and persistent/offline licenses.
 - Thumbnail previews on the seek bar.
 - Low-latency stats (part and chunk timing, playback-rate catch-up).
 - CMCD / CMSD reporting and inspection.

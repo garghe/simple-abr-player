@@ -11,6 +11,7 @@ export const PREFIX = '/__proxy/';
 
 export const FORWARD_REQUEST_HEADERS = [
   'range',
+  'content-type',
   'accept',
   'accept-language',
   'authorization',
@@ -34,11 +35,17 @@ export const FORWARD_RESPONSE_HEADERS = [
 
 export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
   'Access-Control-Allow-Headers': '*',
   'Access-Control-Expose-Headers':
     'Content-Length, Content-Range, Content-Type, Date, Age, X-Proxy-Target, X-Proxy-Status',
 };
+
+/**
+ * POST is accepted for DRM license requests only (small bodies). Media is
+ * never POSTed, so this cannot be used to tunnel playback.
+ */
+export const MAX_POST_BYTES = 256 * 1024;
 
 /** Custom headers set in the UI arrive as X-Proxy-Header-<Name>. */
 export const CUSTOM_HEADER_PREFIX = 'x-proxy-header-';

@@ -5,6 +5,7 @@ import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
 import {
   CORS_HEADERS,
   CUSTOM_HEADER_PREFIX,
+  MAX_POST_BYTES,
   type ProxyHealth,
   FORWARD_REQUEST_HEADERS,
   FORWARD_RESPONSE_HEADERS,
@@ -64,9 +65,24 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.N
     res.setHeader('Cache-Control', 'no-store');
     return res.end(JSON.stringify(health));
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST') {
     res.statusCode = 405;
     return res.end('Method not allowed');
+  }
+  let body: Buffer | undefined;
+  if (req.method === 'POST') {
+    // DRM license requests: read the (small) body to forward it.
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      if (size > MAX_POST_BYTES) {
+        res.statusCode = 413;
+        return res.end('Request body too large for the proxy (license requests only)');
+      }
+      chunks.push(chunk as Buffer);
+    }
+    body = Buffer.concat(chunks);
   }
 
   const target = parseProxyPath(url);
@@ -96,6 +112,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: Connect.N
     const upstream = await undiciFetch(target, {
       method: req.method,
       headers,
+      body,
       redirect: 'manual',
       signal: controller.signal,
       dispatcher: getDispatcher(),
