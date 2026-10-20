@@ -53,7 +53,7 @@ export class DrmTab {
           active.videoRobustness.startsWith('HW_')
             ? 'Hardware-secure video (Widevine L1/L2): the picture goes through a protected hardware path, so screenshots and screen recordings show it black. The player turns off rounded corners and blurred overlays while DRM is in use.'
             : 'Protected video: the page cannot read the decoded frames, so the player turns off rounded corners and blurred overlays while DRM is in use.',
-          ' If audio plays but the picture stays blank, tell us your browser and OS, and try hiding the overlays (keys a and i).',
+          ' If audio plays but the picture stays blank: disconnect DisplayLink docks or adapters (use a directly connected screen), stop any screen sharing or recording, and check Chrome\'s graphics acceleration setting.',
         ),
       );
     }
