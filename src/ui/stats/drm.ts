@@ -45,12 +45,15 @@ export class DrmTab {
       : [['DRM in use', c.loadedUrl ? (encrypted ? 'none yet' : 'none (clear stream)') : '—']];
 
     const notes: HTMLElement[] = [];
-    if (active?.videoRobustness.startsWith('HW_')) {
+    if (active) {
       notes.push(
         h(
           'div',
           { class: 'note info' },
-          'Hardware-secure video (Widevine L1/L2): the picture is drawn by a protected hardware path, so screenshots and screen recordings show it black, and the player turns off rounded corners and blurred overlays. If the picture stays blank while audio plays, try Security level "L3 only" in the DRM settings.',
+          active.videoRobustness.startsWith('HW_')
+            ? 'Hardware-secure video (Widevine L1/L2): the picture goes through a protected hardware path, so screenshots and screen recordings show it black. The player turns off rounded corners and blurred overlays while DRM is in use.'
+            : 'Protected video: the page cannot read the decoded frames, so the player turns off rounded corners and blurred overlays while DRM is in use.',
+          ' If audio plays but the picture stays blank, tell us your browser and OS, and try hiding the overlays (keys a and i).',
         ),
       );
     }

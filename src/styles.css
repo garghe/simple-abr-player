@@ -1686,14 +1686,14 @@ pre .hl {
   }
 }
 
-/* Hardware-protected video (Widevine L1/L2): keep the video "overlay-able". */
-.player.hw-protected {
+/* DRM-protected video: nothing on top may need to read its pixels. */
+.player.drm-protected {
   border-radius: 0;
   overflow: visible;
 }
 
-.player.hw-protected .nerd-overlay,
-.player.hw-protected .audio-overlay {
+.player.drm-protected .nerd-overlay,
+.player.drm-protected .audio-overlay {
   backdrop-filter: none;
   background: rgba(10, 12, 18, 0.92);
 }

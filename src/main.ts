@@ -222,12 +222,13 @@ function renderSummary() {
   );
 }
 
-// Hardware-secure Widevine (L1/L2) video is shown through a protected
-// overlay plane; rounded clipping and backdrop blur on top of it make Chrome
-// and Edge show a blank picture, so drop those effects while it is in use.
+// DRM-protected frames can't be read back by the page (even Widevine L3),
+// and hardware-secure ones (L1/L2) go through a protected overlay plane.
+// Rounded clipping and backdrop blur over the video need those pixels, and
+// Chrome then shows a blank (white) picture, so drop those effects while any
+// DRM is in use.
 function updateProtectedVideo() {
-  const robustness = ctrl.activeDrm()?.videoRobustness ?? '';
-  playerEl.classList.toggle('hw-protected', robustness.startsWith('HW_'));
+  playerEl.classList.toggle('drm-protected', ctrl.activeDrm() !== null);
 }
 ctrl.on('drm', updateProtectedVideo);
 ctrl.on('loaded', updateProtectedVideo);
