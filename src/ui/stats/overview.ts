@@ -77,9 +77,9 @@ export function snapshot(ctrl: PlayerController): Snapshot {
     estimatedBandwidth: stats.estimatedBandwidth,
     bufferAhead: range ? range.end - t : 0,
     bufferBehind: range ? t - range.start : 0,
-    droppedFrames: quality?.droppedVideoFrames ?? stats.droppedFrames ?? 0,
-    decodedFrames: quality?.totalVideoFrames ?? stats.decodedFrames ?? 0,
-    corruptedFrames: stats.corruptedFrames ?? 0,
+    droppedFrames: count(quality?.droppedVideoFrames ?? stats.droppedFrames),
+    decodedFrames: count(quality?.totalVideoFrames ?? stats.decodedFrames),
+    corruptedFrames: count(stats.corruptedFrames),
     liveLatency: loaded && p.isLive() && Number.isFinite(stats.liveLatency) ? stats.liveLatency : null,
     seekRange: loaded ? p.seekRange() : null,
     playheadDate: loaded ? p.getPlayheadTimeAsDate() : null,
@@ -152,4 +152,9 @@ export class OverviewTab {
       ]),
     );
   }
+}
+
+/** Shaka reports unavailable counters as NaN; show those as 0. */
+function count(n: number | undefined): number {
+  return Number.isFinite(n) ? (n as number) : 0;
 }
