@@ -19,6 +19,7 @@ const MODES: [DrmMode, string][] = [
   ['off', 'Off'],
   ['auto', 'Auto'],
   ['widevine', 'Widevine'],
+  ['playready', 'PlayReady'],
   ['fairplay', 'FairPlay'],
 ];
 
@@ -29,7 +30,7 @@ const labelled = (text: string, control: HTMLElement, hint?: string) =>
   h('label', { class: 'drm-field' }, h('span', null, text, hint ? h('small', null, ` ${hint}`) : ''), control);
 
 /**
- * DRM settings: mode, Widevine and FairPlay license servers, generic
+ * DRM settings: mode, Widevine, PlayReady and FairPlay license servers, generic
  * request/response formats, license headers, proxy, and saved profiles.
  * Values only leave the browser in license/certificate requests.
  */
@@ -39,6 +40,7 @@ export class DrmPanel {
   private profileSel = h('select', { 'aria-label': 'Saved DRM profile' });
   private modeButtons = new Map<DrmMode, HTMLButtonElement>();
   private wvBox!: HTMLFieldSetElement;
+  private prBox!: HTMLFieldSetElement;
   private fpBox!: HTMLFieldSetElement;
   private proxyBox = h('input', { type: 'checkbox' });
   private proxyNote = h('small', { class: 'muted' });
@@ -77,6 +79,14 @@ export class DrmPanel {
     this.changed();
   }
 
+  /** Fills in a license URL declared by the stream ("Use this" in the DRM tab). */
+  useLicenseUrl(system: 'widevine' | 'playready', url: string): void {
+    this.settings[system].licenseUrl = url;
+    if (this.settings.mode === 'off') this.settings.mode = system;
+    this.render();
+    this.changed();
+  }
+
   private changed() {
     rememberDrm(this.remember.checked ? this.settings : null);
     for (const fn of this.listeners) fn();
@@ -99,7 +109,7 @@ export class DrmPanel {
     return el;
   }
 
-  private formatControls(prefix: 'widevine' | 'fairplay', requests: [string, string][], responses: [string, string][]) {
+  private formatControls(prefix: 'widevine' | 'playready' | 'fairplay', requests: [string, string][], responses: [string, string][]) {
     const reqSel = this.bind(`${prefix}.requestFormat`, select(requests, 'Request format'));
     const template = this.bind(
       `${prefix}.template`,
@@ -158,6 +168,45 @@ export class DrmPanel {
         'widevine',
         [
           ['raw', 'Raw (standard)'],
+          ['base64', 'Base64 text'],
+          ['json', 'JSON template'],
+        ],
+        [
+          ['auto', 'Auto-detect'],
+          ['raw', 'Raw'],
+          ['base64', 'Base64 text'],
+          ['json', 'JSON field'],
+        ],
+      ),
+    );
+
+    this.prBox = h(
+      'fieldset',
+      { class: 'drm-box' },
+      h('legend', null, 'PlayReady', h('small', null, ' Edge on Windows · Smart TVs · Xbox')),
+      labelled(
+        'License URL',
+        this.bind('playready.licenseUrl', h('input', { type: 'url', placeholder: "empty: use the stream's license URL (LA_URL)", spellcheck: false, 'aria-label': 'PlayReady license URL' })),
+      ),
+      labelled(
+        'Security level',
+        this.bind(
+          'playready.level',
+          select(
+            [
+              ['auto', 'Auto (best available)'],
+              ['sl3000', 'SL3000 only (hardware)'],
+              ['sl2000', 'SL2000 only (software)'],
+            ],
+            'PlayReady security level',
+          ),
+        ),
+        'Windows: Edge, Firefox; Chrome has SL3000 only',
+      ),
+      this.formatControls(
+        'playready',
+        [
+          ['raw', 'Raw SOAP XML (standard)'],
           ['base64', 'Base64 text'],
           ['json', 'JSON template'],
         ],
@@ -264,7 +313,7 @@ export class DrmPanel {
     clear(
       this.el,
       h('div', { class: 'drm-top' }, h('div', { class: 'drm-mode' }, h('strong', null, 'DRM'), modeSeg), profiles),
-      h('div', { class: 'drm-grid' }, this.wvBox, this.fpBox),
+      h('div', { class: 'drm-grid' }, this.wvBox, this.prBox, this.fpBox),
       h(
         'div',
         { class: 'drm-bottom' },
@@ -295,10 +344,11 @@ export class DrmPanel {
       if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = Boolean(value);
       else if (document.activeElement !== el) el.value = String(value ?? '');
     }
-    this.wvBox.disabled = s.mode === 'off' || s.mode === 'fairplay';
-    this.fpBox.disabled = s.mode === 'off' || s.mode === 'widevine';
+    this.wvBox.disabled = s.mode !== 'auto' && s.mode !== 'widevine';
+    this.prBox.disabled = s.mode !== 'auto' && s.mode !== 'playready';
+    this.fpBox.disabled = s.mode !== 'auto' && s.mode !== 'fairplay';
     const show = (selector: string, visible: boolean) => this.el.querySelectorAll<HTMLElement>(selector).forEach((e) => (e.hidden = !visible));
-    for (const ks of ['widevine', 'fairplay'] as const) {
+    for (const ks of ['widevine', 'playready', 'fairplay'] as const) {
       const f: LicenseFormat = s[ks];
       show(`[data-for="${ks}.template"]`, f.requestFormat === 'json' || f.requestFormat === 'form');
       show(`[data-for="${ks}.responseField"]`, f.responseFormat === 'json');

@@ -4,7 +4,7 @@ import { AudioTab } from './audio';
 import type { ScteEvent } from '../../scte/monitor';
 import { h } from '../dom';
 import { DeviceTab } from './device';
-import { DrmTab } from './drm';
+import { DrmTab, type DrmActions } from './drm';
 import { LogTab } from './log';
 import { ManifestTab } from './manifest';
 import { NetworkTab } from './network';
@@ -36,14 +36,14 @@ export class StatsPanel {
     nav: HTMLElement,
     private readonly body: HTMLElement,
     audio: AudioEngine,
-    openDrmSettings: () => void,
+    drmActions: DrmActions,
   ) {
     this.scteTab = new ScteTab(ctrl);
     this.tabs = [
       { id: 'overview', label: 'Overview', view: new OverviewTab(ctrl), events: ['tick', 'loaded', 'tracks'] },
       { id: 'tracks', label: 'Tracks', view: new TracksTab(ctrl), events: ['tracks', 'loaded'] },
       { id: 'audio', label: 'Audio', view: new AudioTab(ctrl, audio), events: ['audio', 'tracks', 'loaded', 'documents'] },
-      { id: 'drm', label: 'DRM', view: new DrmTab(ctrl, openDrmSettings), events: ['drm', 'loaded', 'tracks'], count: () => ctrl.drm.exchanges.filter((x) => x.error).length },
+      { id: 'drm', label: 'DRM', view: new DrmTab(ctrl, drmActions), events: ['drm', 'loaded', 'tracks'], count: () => ctrl.drm.exchanges.filter((x) => x.error).length },
       { id: 'scte', label: 'SCTE-35', view: this.scteTab, events: ['scte', 'tick', 'loaded'], count: () => ctrl.scte.size },
       { id: 'network', label: 'Network', view: new NetworkTab(ctrl), events: ['network'], count: () => ctrl.network.filter((e) => e.error).length },
       { id: 'manifest', label: 'Manifest', view: new ManifestTab(ctrl), events: ['documents'] },

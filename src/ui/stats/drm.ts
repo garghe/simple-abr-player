@@ -1,10 +1,16 @@
 import { KEY_STATUS_TEXT } from '../../drm/errors';
 import { formatKid } from '../../drm/inspect';
 import type { LicenseExchange } from '../../drm/monitor';
-import { widevineLevelName } from '../../drm/settings';
+import { playReadyLevelName, widevineLevelName } from '../../drm/settings';
 import type { PlayerController } from '../../player/controller';
 import { badge, dataTable, h, kvTable } from '../dom';
 import { clock, formatBytes, shortUri } from '../format';
+
+export interface DrmActions {
+  open(): void;
+  /** Copies a license URL declared by the stream into the DRM settings. */
+  useLicenseUrl(system: 'widevine' | 'playready', url: string): void;
+}
 
 const STATUS_CLASS: Record<string, string> = { usable: 'ok', expired: 'warn', 'output-restricted': 'warn', 'internal-error': 'warn' };
 
@@ -18,8 +24,12 @@ export class DrmTab {
 
   constructor(
     private readonly ctrl: PlayerController,
-    private readonly openSettings: () => void,
+    private readonly actions: DrmActions,
   ) {}
+
+  private openSettings() {
+    this.actions.open();
+  }
 
   render(): void {
     const c = this.ctrl;
@@ -28,11 +38,17 @@ export class DrmTab {
     const declared = [...m.declared.values()];
     const encrypted = declared.some((d) => d.system !== 'AES-128 (key file)');
 
-    const level = active ? (active.name === 'Widevine' ? widevineLevelName(active.videoRobustness) : '') : '';
+    const level = !active
+      ? ''
+      : active.name === 'Widevine'
+        ? widevineLevelName(active.videoRobustness)
+        : active.name === 'PlayReady'
+          ? playReadyLevelName(active.keySystem, active.videoRobustness)
+          : '';
     const summary: [string, HTMLElement | string][] = active
       ? [
           ['DRM in use', h('span', null, badge(`${active.name}${level ? ` ${level.split(' ')[0]}` : ''}`, 'accent'), ' ', h('span', { class: 'mono small' }, active.keySystem))],
-          ...(active.name === 'Widevine'
+          ...(active.name === 'Widevine' || active.name === 'PlayReady'
             ? ([['Security level', `${level || '—'}${active.videoRobustness ? ` · video ${active.videoRobustness}` : ''}${active.audioRobustness ? ` · audio ${active.audioRobustness}` : ''}`]] as [string, string][])
             : []),
           ['Encryption scheme', active.scheme || '—'],
@@ -50,8 +66,8 @@ export class DrmTab {
         h(
           'div',
           { class: 'note info' },
-          active.videoRobustness.startsWith('HW_')
-            ? 'Hardware-secure video (Widevine L1/L2): the picture goes through a protected hardware path, so screenshots and screen recordings show it black. The player turns off rounded corners and blurred overlays while DRM is in use.'
+          active.videoRobustness.startsWith('HW_') || level.startsWith('SL3000')
+            ? 'Hardware-secure video (Widevine L1/L2, PlayReady SL3000): the picture goes through a protected hardware path, so screenshots and screen recordings show it black. The player turns off rounded corners and blurred overlays while DRM is in use.'
             : 'Protected video: the page cannot read the decoded frames, so the player turns off rounded corners and blurred overlays while DRM is in use.',
           ' If audio plays but the picture stays blank: disconnect DisplayLink docks or adapters (use a directly connected screen), stop any screen sharing or recording, and check Chrome\'s graphics acceleration setting.',
         ),
@@ -84,7 +100,7 @@ export class DrmTab {
           d.system,
           d.scheme ?? '—',
           h('span', { class: 'mono small' }, d.keyIds.length ? d.keyIds.map(formatKid).join('\n') : '—'),
-          h('span', { class: 'small break' }, d.details.join(' · ') || '—'),
+          h('span', { class: 'small break' }, d.details.join(' · ') || (d.licenseUrl ? '' : '—'), d.licenseUrl ? this.licenseUrl(d.system, d.licenseUrl) : ''),
         ]),
         'compact drm-declared',
       ),
@@ -118,6 +134,17 @@ export class DrmTab {
         'compact drm-exchanges',
       ),
       ...(sel ? this.detail(sel) : []),
+    );
+  }
+
+  /** License URL declared by the stream, with a button to use it. */
+  private licenseUrl(system: string, url: string): HTMLElement {
+    const target = system === 'PlayReady' ? 'playready' : system === 'Widevine' ? 'widevine' : null;
+    return h(
+      'div',
+      { class: 'drm-stream-url' },
+      h('span', null, 'License URL in the stream: ', h('span', { class: 'mono break' }, url)),
+      target ? h('button', { type: 'button', class: 'linklike', onclick: () => this.actions.useLicenseUrl(target, url) }, 'Use this') : '',
     );
   }
 

@@ -12,14 +12,24 @@ function httpStatus(data: unknown[] | undefined): number | null {
   return typeof status === 'number' ? status : null;
 }
 
+const WHERE: Record<string, string> = {
+  Widevine: 'Widevine needs Chrome, Edge or Firefox (not Safari)',
+  PlayReady: 'PlayReady needs Windows (Edge; or Chrome and Firefox with hardware PlayReady), a Smart TV or an Xbox',
+  FairPlay: 'FairPlay needs Safari',
+};
+
+/** Explanation when the DRM chosen in the settings does not exist in this browser. */
+export const drmUnavailableHint = (name: string): string =>
+  `This browser has no ${name}: ${WHERE[name] ?? 'try another browser'}. The Device tab lists the DRM systems available here.`;
+
 export function drmHint(err: unknown): string | null {
   const e = (err ?? {}) as ErrorLike;
   switch (e.code) {
     case 6001:
-      return 'This browser cannot use the requested DRM. Widevine needs Chrome, Edge or Firefox (not Safari); FairPlay needs Safari. Check the Device tab, and try Widevine security level "Auto" or "Software".';
+      return 'This browser cannot use the requested DRM. Widevine needs Chrome, Edge or Firefox (not Safari); PlayReady needs Windows (Edge; or Chrome/Firefox with hardware PlayReady), a Smart TV or Xbox; FairPlay needs Safari. Check the Device tab, and try security level "Auto".';
     case 6002:
     case 6003:
-      return 'The browser could not start its DRM module. Reload the page; in Chrome check chrome://components that "Widevine Content Decryption Module" is up to date.';
+      return 'The browser could not start its DRM module. Reload the page; in Chrome check chrome://components that "Widevine Content Decryption Module" is up to date. For PlayReady SL3000, the graphics driver must support hardware DRM: try security level "SL2000" in Edge.';
     case 6004:
       return 'The FairPlay certificate was rejected. Check that it is the right certificate for this license server (binary .der or base64 both work).';
     case 6006:
@@ -35,7 +45,7 @@ export function drmHint(err: unknown): string | null {
     case 6010:
       return 'The stream is encrypted but declares no DRM information the player can use. For HLS Widevine/FairPlay check the EXT-X-KEY tags; set the DRM type explicitly in the DRM settings.';
     case 6012:
-      return 'The stream is encrypted, but no license server is set for its DRM system. Open the DRM settings and enter the license URL.';
+      return 'The stream is encrypted, but no license server is set for its DRM system (and the stream declares none). Open the DRM settings and enter the license URL.';
     case 6014:
       return 'The license has expired.';
     case 6015:

@@ -3,7 +3,7 @@ import { parseHlsCues, type HlsCue } from '../scte/hls-cues';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
 import { initProtectionToDeclared, parseHlsProtection, parseMpdProtection, scanInitSegment } from '../drm/inspect';
-import { WIDEVINE_ROBUSTNESS, isDrmConfigured, type DrmSettings, type LicenseFormat } from '../drm/settings';
+import { PLAYREADY_ROBUSTNESS, WIDEVINE_ROBUSTNESS, isDrmConfigured, usesPlayReady, type DrmSettings, type LicenseFormat } from '../drm/settings';
 import { buildLicenseRequest, fairPlayContentId, fromBase64, looksLikeBase64, parseLicenseResponse } from '../drm/transform';
 import { parseHeaders } from '../settings';
 import { detectProxy, fromProxyUrl, isProxied, routeUri, type ProxyInfo, type ProxyMode } from './proxy';
@@ -21,10 +21,59 @@ export interface LoadOptions {
 
 const WIDEVINE = 'com.widevine.alpha';
 const FAIRPLAY = 'com.apple.fps';
+const PLAYREADY = 'com.microsoft.playready';
+const PLAYREADY_RECOMMENDATION = 'com.microsoft.playready.recommendation';
 const isFairPlay = (ks: string | undefined | null) => Boolean(ks && ks.startsWith('com.apple.fps'));
+const isPlayReady = (ks: string | undefined | null) => Boolean(ks && /^com\.(microsoft|chromecast)\.playready/.test(ks));
+
+/** Display name of an EME key system. */
+export function keySystemName(ks: string): string {
+  if (ks === WIDEVINE) return 'Widevine';
+  if (isFairPlay(ks)) return 'FairPlay';
+  if (isPlayReady(ks)) return 'PlayReady';
+  if (ks.includes('clearkey')) return 'ClearKey';
+  return ks;
+}
+
+/**
+ * Edge and Firefox on Windows take the PlayReady security level as the
+ * robustness of the "recommendation" key system. Elsewhere Shaka's own
+ * per-device choice is kept (Chrome on Windows: hardware SL3000 only; TVs and
+ * consoles: their native key system).
+ */
+const playReadyLevelSelectable = () => {
+  const ua = navigator.userAgent;
+  return /Windows/.test(ua) && (/Edg\//.test(ua) || /Firefox\//.test(ua));
+};
 
 const toBytes = (d: ArrayBuffer | ArrayBufferView): Uint8Array =>
   d instanceof ArrayBuffer ? new Uint8Array(d) : new Uint8Array(d.buffer, d.byteOffset, d.byteLength);
+
+const MODE_KEY_SYSTEMS: Partial<Record<DrmSettings['mode'], [string, string[]]>> = {
+  widevine: ['Widevine', [WIDEVINE]],
+  playready: ['PlayReady', [PLAYREADY_RECOMMENDATION, 'com.microsoft.playready.recommendation.3000', PLAYREADY]],
+  fairplay: ['FairPlay', [FAIRPLAY, 'com.apple.fps.1_0']],
+};
+
+/** Name of the DRM chosen in the settings when this browser offers none of its key systems. */
+async function selectedDrmMissing(drm: DrmSettings | undefined): Promise<string | null> {
+  const entry = drm && !drm.testKeySystem && isDrmConfigured(drm) ? MODE_KEY_SYSTEMS[drm.mode] : undefined;
+  if (!entry || !navigator.requestMediaKeySystemAccess) return null;
+  const config: MediaKeySystemConfiguration[] = [
+    {
+      videoCapabilities: ['video/mp4; codecs="avc1.42E01E"', 'video/mp4; codecs="hvc1.1.6.L93.B0"', 'video/webm; codecs="vp9"'].map((contentType) => ({ contentType })),
+    },
+  ];
+  for (const ks of entry[1]) {
+    try {
+      await navigator.requestMediaKeySystemAccess(ks, config);
+      return null;
+    } catch {
+      /* try the next one */
+    }
+  }
+  return entry[0];
+}
 
 /** True when this browser has a native HLS player (Safari). */
 const hasNativeHls = () => document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '';
@@ -106,6 +155,8 @@ export class PlayerController extends EventTarget {
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
   readonly drm = new DrmMonitor();
+  /** The DRM picked in the settings (Widevine / PlayReady / FairPlay mode) when this browser lacks it. */
+  unavailableDrm: string | null = null;
 
   proxy: ProxyInfo | null = null;
   usingProxy = false;
@@ -163,6 +214,7 @@ export class PlayerController extends EventTarget {
   async load(options: LoadOptions): Promise<void> {
     this.options = options;
     this.resetSession();
+    this.unavailableDrm = await selectedDrmMissing(options.drm);
     // Start from Shaka's defaults every time so DRM settings of the previous
     // stream never leak into the next one.
     this.player.resetConfiguration();
@@ -198,10 +250,20 @@ export class PlayerController extends EventTarget {
     const useFp = drm.mode === 'auto' || drm.mode === 'fairplay';
     const wv = drm.widevine;
     const fp = drm.fairplay;
+    const pr = drm.playready;
     if (useWv && wv.licenseUrl.trim()) {
       servers[WIDEVINE] = wv.licenseUrl.trim();
       const r = WIDEVINE_ROBUSTNESS[wv.level];
       advanced[WIDEVINE] = { videoRobustness: r.video, audioRobustness: r.audio };
+    }
+    let keySystemsMapping: Record<string, string> | undefined;
+    if (usesPlayReady(drm)) {
+      // Empty URL: Shaka uses the LA_URL from the stream's PlayReady header.
+      if (pr.licenseUrl.trim()) servers[PLAYREADY] = pr.licenseUrl.trim();
+      if (playReadyLevelSelectable()) {
+        keySystemsMapping = { [PLAYREADY]: PLAYREADY_RECOMMENDATION };
+        advanced[PLAYREADY_RECOMMENDATION] = { videoRobustness: PLAYREADY_ROBUSTNESS[pr.level] };
+      }
     }
     if (drm.testKeySystem) servers[drm.testKeySystem.keySystem] = drm.testKeySystem.licenseUrl;
     let fairPlay = false;
@@ -212,14 +274,25 @@ export class PlayerController extends EventTarget {
         : { serverCertificateUri: fp.certificateUrl.trim() };
       fairPlay = true;
     }
+    // Auto: on Edge both Widevine and PlayReady exist; prefer PlayReady when it is set up.
+    const preferred: Record<DrmSettings['mode'], string[]> = {
+      off: [],
+      auto: usesPlayReady(drm) ? [PLAYREADY_RECOMMENDATION, PLAYREADY] : [],
+      widevine: [WIDEVINE],
+      playready: [PLAYREADY_RECOMMENDATION, PLAYREADY, 'com.microsoft.playready.recommendation.3000'],
+      fairplay: [FAIRPLAY],
+    };
     this.player.configure({
       drm: {
         servers,
         advanced: advanced as Record<string, shaka.extern.AdvancedDrmConfiguration>,
-        preferredKeySystems: drm.mode === 'fairplay' ? [FAIRPLAY] : drm.mode === 'widevine' ? [WIDEVINE] : [],
+        preferredKeySystems: preferred[drm.mode],
+        ...(keySystemsMapping ? { keySystemsMapping } : {}),
       },
     });
-    this.info(`DRM: ${Object.keys(servers).map((k) => (k === WIDEVINE ? 'Widevine' : isFairPlay(k) ? 'FairPlay' : k)).join(' + ')} configured`);
+    const names = Object.keys(servers).map(keySystemName);
+    if (usesPlayReady(drm) && !servers[PLAYREADY]) names.push("PlayReady (stream's license URL)");
+    this.info(`DRM: ${names.join(' + ')} configured`);
     return fairPlay;
   }
 
@@ -317,6 +390,14 @@ export class PlayerController extends EventTarget {
         });
         this.exchangeByRequest.set(request, x);
       }
+      if (type === RT.LICENSE && proxied) {
+        // Headers the DRM module asks for (PlayReady's SOAPAction) must survive the proxy too.
+        for (const [k, v] of Object.entries(request.headers)) {
+          if (k.toLowerCase() === 'content-type' || k.toLowerCase().startsWith('x-proxy-header-')) continue;
+          delete request.headers[k];
+          request.headers[`X-Proxy-Header-${k}`] = v;
+        }
+      }
       for (const [k, v] of Object.entries(headers)) {
         // Through the proxy, custom headers are forwarded as X-Proxy-Header-*.
         request.headers[proxied ? `X-Proxy-Header-${k}` : k] = v;
@@ -405,7 +486,9 @@ export class PlayerController extends EventTarget {
   // ------------------------------------------------------------------- DRM
 
   private licenseFormat(drm: DrmSettings, keySystem: string | undefined): LicenseFormat {
-    return isFairPlay(keySystem) ? drm.fairplay : drm.widevine;
+    if (isFairPlay(keySystem)) return drm.fairplay;
+    if (isPlayReady(keySystem)) return drm.playready;
+    return drm.widevine;
   }
 
   /** Applies the generic request format and records the exchange. */
@@ -420,10 +503,11 @@ export class PlayerController extends EventTarget {
     const keyId = request.drmInfo?.keyIds ? [...request.drmInfo.keyIds][0] ?? '' : '';
     const x = this.drm.start({
       kind: 'license',
-      keySystem: fp ? 'FairPlay' : keySystem === WIDEVINE ? 'Widevine' : keySystem.includes('clearkey') ? 'ClearKey' : keySystem,
+      keySystem: keySystemName(keySystem),
       url: fromProxyUrl(request.uris[0] ?? ''),
       proxied,
-      requestHeaders: headerNames,
+      // Custom headers plus the ones the DRM module set (PlayReady: Content-Type, SOAPAction).
+      requestHeaders: [...new Set([...Object.keys(request.headers), ...headerNames])],
       requestFormat: fmt.requestFormat + (contentId ? ` · content ID ${contentId}` : ''),
       requestBytes: challenge.byteLength,
       requestPreview: '',
@@ -434,7 +518,13 @@ export class PlayerController extends EventTarget {
       request.body = built.body;
       if (built.contentType) request.headers['Content-Type'] = built.contentType;
       x.requestBytes = built.body.byteLength;
-      x.requestPreview = fmt.requestFormat === 'raw' ? `${challenge.byteLength} B binary message from the DRM module` : new TextDecoder().decode(built.body).slice(0, 1500);
+      // PlayReady challenges are SOAP XML (Shaka has already unwrapped Edge's envelope): show them.
+      x.requestPreview =
+        fmt.requestFormat !== 'raw'
+          ? new TextDecoder().decode(built.body).slice(0, 1500)
+          : isPlayReady(keySystem)
+            ? preview(challenge)
+            : `${challenge.byteLength} B binary message from the DRM module`;
     } catch (err) {
       this.drm.finish(x, { error: `Request template error: ${err instanceof Error ? err.message : err}` });
       throw err;
@@ -473,7 +563,7 @@ export class PlayerController extends EventTarget {
   activeDrm(): { keySystem: string; name: string; videoRobustness: string; audioRobustness: string; scheme: string; licenseUrl: string } | null {
     const info = this.loadedUrl ? this.player.drmInfo() : null;
     if (!info || !info.keySystem) return null;
-    const name = info.keySystem === WIDEVINE ? 'Widevine' : isFairPlay(info.keySystem) ? 'FairPlay' : info.keySystem.includes('clearkey') ? 'ClearKey' : info.keySystem;
+    const name = keySystemName(info.keySystem);
     return {
       keySystem: info.keySystem,
       name,

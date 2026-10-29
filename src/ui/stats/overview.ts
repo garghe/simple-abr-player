@@ -1,4 +1,4 @@
-import { widevineLevelName } from '../../drm/settings';
+import { playReadyLevelName, widevineLevelName } from '../../drm/settings';
 import type { PlayerController } from '../../player/controller';
 import { drawChart } from '../chart';
 import { badge, h, kvTable } from '../dom';
@@ -7,7 +7,8 @@ import { clock, formatBitrate, formatBytes, formatPrecise, formatTime } from '..
 function drmLabel(ctrl: PlayerController): string {
   const d = ctrl.activeDrm();
   if (!d) return 'clear';
-  const level = d.name === 'Widevine' ? widevineLevelName(d.videoRobustness).split(' ')[0] : '';
+  const name = d.name === 'Widevine' ? widevineLevelName(d.videoRobustness) : d.name === 'PlayReady' ? playReadyLevelName(d.keySystem, d.videoRobustness) : '';
+  const level = name.split(' ')[0];
   return `${d.name}${level ? ` ${level}` : ''}`;
 }
 

@@ -9,8 +9,10 @@
 // public "Angel One" ClearKey stream against a local test license server and
 // checks the generic machinery: license URL, headers, request/response
 // formats, the CORS proxy for license POSTs, key statuses, the DRM tab and
-// the error hints. It also checks that the Widevine settings in the UI reach
-// the player (the browser then reports Widevine as unavailable).
+// the error hints. It also checks that the Widevine and PlayReady settings in
+// the UI reach the player (the browser then reports them as unavailable), and
+// that a PlayReady header in the MPD is decoded, with its license URL usable
+// from the DRM tab.
 //
 // Set CHROMIUM_PATH to use a specific Chromium/Chrome binary.
 
@@ -27,6 +29,32 @@ const STREAM = 'https://storage.googleapis.com/shaka-demo-assets/angel-one-clear
 const WIDEVINE_STREAM = 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/dash.mpd';
 const KEYS = { feedf00deedeadbeeff0baadf00dd00d: '00112233445566778899aabbccddeeff' };
 const TOKEN = 'test-token';
+const PR_LA_URL = 'https://playready.example.com/rightsmanager.asmx?cfg=(sl:150)';
+const PR_KID = 'feedf00d-eede-adbe-eff0-baadf00dd00d';
+const PR_INPUT = 'input[aria-label="PlayReady license URL"]';
+
+/** PlayReady Object (as in <mspr:pro>) with a v4.0 WRMHEADER for the stream's key. */
+function playReadyObject() {
+  const kid = Buffer.from(PR_KID.replace(/-/g, ''), 'hex');
+  const guid = Buffer.from([kid[3], kid[2], kid[1], kid[0], kid[5], kid[4], kid[7], kid[6], ...kid.subarray(8)]);
+  const xml = `<WRMHEADER xmlns="http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader" version="4.0.0.0"><DATA><PROTECTINFO><KEYLEN>16</KEYLEN><ALGID>AESCTR</ALGID></PROTECTINFO><KID>${guid.toString('base64')}</KID><LA_URL>${PR_LA_URL}</LA_URL></DATA></WRMHEADER>`;
+  const body = Buffer.from(xml, 'utf16le');
+  const head = Buffer.alloc(10);
+  head.writeUInt32LE(10 + body.length, 0);
+  head.writeUInt16LE(1, 4);
+  head.writeUInt16LE(1, 6);
+  head.writeUInt16LE(body.length, 8);
+  return Buffer.concat([head, body]).toString('base64');
+}
+
+/** The ClearKey MPD with a PlayReady ContentProtection added (segments stay remote). */
+const prMpd = (await (await fetch(STREAM)).text())
+  .replace(/(<MPD\b[^>]*>)/, `$1<BaseURL>${STREAM.replace(/[^/]*$/, '')}</BaseURL>`)
+  .replace(/xmlns="urn:mpeg:dash:schema:mpd:2011"/, '$& xmlns:mspr="urn:microsoft:playready"')
+  .replace(
+    /(<ContentProtection[^>]*mp4protection[^>]*\/?>(?:\s*<\/ContentProtection>)?)/g,
+    `$1<ContentProtection schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95"><mspr:pro>${playReadyObject()}</mspr:pro></ContentProtection>`,
+  );
 
 const b64url = (hex) => Buffer.from(hex, 'hex').toString('base64url');
 function clearKeyResponse(requestJson) {
@@ -49,13 +77,17 @@ const license = createHttpServer(async (req, res) => {
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => r(Buffer.concat(chunks)));
   });
-  const cors = req.url.startsWith('/raw');
+  const cors = req.url.startsWith('/raw') || req.url.startsWith('/pr.mpd');
   if (cors) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
   }
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
   try {
+    if (req.url.startsWith('/pr.mpd')) {
+      res.setHeader('Content-Type', 'application/dash+xml');
+      return res.end(prMpd);
+    }
     if (req.url.startsWith('/raw')) {
       res.setHeader('Content-Type', 'application/json');
       return res.end(clearKeyResponse(body.toString()));
@@ -98,6 +130,15 @@ const DRM = (over = {}) => ({
     responseField: 'license',
     ...over.widevine,
   },
+  playready: {
+    licenseUrl: '',
+    level: 'auto',
+    requestFormat: 'raw',
+    template: '{"challenge":"{{challenge}}"}',
+    responseFormat: 'auto',
+    responseField: 'license',
+    ...over.playready,
+  },
   fairplay: {
     licenseUrl: '',
     certificateUrl: '',
@@ -116,7 +157,7 @@ const DRM = (over = {}) => ({
   ...over,
 });
 
-async function playClearKey(page, drm) {
+async function playClearKey(page, drm, url = STREAM) {
   return page.evaluate(
     async ({ url, drm }) => {
       const c = window.abrPlayer;
@@ -140,9 +181,10 @@ async function playClearKey(page, drm) {
         exchange: x && { status: x.status, error: x.error, detected: x.detected, proxied: x.proxied, headers: x.requestHeaders, format: x.requestFormat },
         keyStatuses: c.drm.keyStatuses,
         declared: [...c.drm.declared.values()].map((d) => `${d.source}:${d.system}`),
+        playready: [...c.drm.declared.values()].find((d) => d.system === 'PlayReady'),
       };
     },
-    { url: STREAM, drm },
+    { url, drm },
   );
 }
 
@@ -284,6 +326,61 @@ try {
       lic: document.querySelector('input[placeholder="https://license.example.com/widevine"]').value,
     }));
     check('Widevine preset fills the license server', preset.mode.includes('Widevine') && preset.lic.includes('cwip-shaka-proxy'), JSON.stringify(preset));
+    await page.close();
+  }
+
+  // 6. PlayReady: header decoded from the MPD, "Use this" fills the settings, preset and mode.
+  {
+    const page = await newPage();
+    const r = await playClearKey(page, DRM({ testKeySystem: { keySystem: 'org.w3.clearkey', licenseUrl: `${LIC}/raw` } }), `${LIC}/pr.mpd`);
+    check('stream with a PlayReady header still plays (ClearKey)', !r.error && r.time > 2, `t=${r.time?.toFixed(1)} ${r.error ? JSON.stringify(r.error) : ''}`);
+    check(
+      'PlayReady header decoded: key ID, version, license URL',
+      r.playready?.keyIds?.includes(PR_KID.replace(/-/g, '')) && r.playready.details.includes('PlayReady header v4.0.0.0') && r.playready.licenseUrl === PR_LA_URL,
+      JSON.stringify(r.playready),
+    );
+    await page.evaluate(() => (document.querySelector('#player-message').hidden = true));
+    await page.click('button.tab:has-text("DRM")');
+    await page.waitForTimeout(300);
+    await page.click('.drm-stream-url button:has-text("Use this")');
+    await page.waitForTimeout(300);
+    const used = await page.evaluate((sel) => ({
+      lic: document.querySelector(sel)?.value,
+      button: document.querySelector('#drm-btn').textContent,
+      open: !document.querySelector('#drm-panel').hidden,
+    }), PR_INPUT);
+    check('"Use this" copies the stream\'s license URL into PlayReady', used.lic === PR_LA_URL && used.button.includes('PlayReady') && used.open, JSON.stringify(used));
+    if (shots) {
+      await page.screenshot({ path: join(root, 'docs', 'screenshots', 'drm-playready.png'), fullPage: true });
+      console.log('  saved docs/screenshots/drm-playready.png');
+    }
+    await page.close();
+  }
+  {
+    const page = await newPage();
+    await page.selectOption('#presets', { label: 'Tears of Steel — DASH PlayReady (Microsoft test server)' });
+    await page.waitForTimeout(500);
+    const preset = await page.evaluate((sel) => ({
+      mode: document.querySelector('#drm-btn').textContent,
+      lic: document.querySelector(sel).value,
+    }), PR_INPUT);
+    check('PlayReady preset fills the license server', preset.mode.includes('PlayReady') && preset.lic.includes('test.playready.microsoft.com'), JSON.stringify(preset));
+    await page.close();
+  }
+  {
+    // PlayReady mode with no URL: the stream's LA_URL is used; headless Chromium has no PlayReady.
+    const page = await newPage();
+    await page.click('#drm-btn');
+    await page.click('.drm-mode button:has-text("PlayReady")');
+    await page.fill('#url', `${LIC}/pr.mpd`);
+    await page.click('#load-btn');
+    await page.waitForTimeout(5000);
+    const r = await page.evaluate(() => ({
+      message: document.querySelector('#player-message')?.textContent ?? '',
+      log: window.abrPlayer.log.map((l) => l.message).join(' | '),
+    }));
+    check("PlayReady without a URL uses the stream's license URL", r.log.includes("DRM: PlayReady (stream's license URL) configured"), r.log.match(/DRM: [^|]*/)?.[0]);
+    check('no PlayReady here: clear explanation shown', /This browser has no PlayReady: PlayReady needs Windows/.test(r.message), r.message.slice(0, 200));
     await page.close();
   }
 } finally {

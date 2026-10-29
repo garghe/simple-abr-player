@@ -3,13 +3,18 @@ import type { DrmSettings } from './drm/settings';
 export interface Preset {
   name: string;
   url: string;
-  group: 'Bundled sample (offline)' | 'VOD' | 'Live' | 'DRM (Widevine test)';
+  group: 'Bundled sample (offline)' | 'VOD' | 'Live' | 'DRM (Widevine test)' | 'DRM (PlayReady test)';
   notes?: string;
   /** DRM settings filled in when this preset is chosen. */
-  drm?: Omit<Partial<DrmSettings>, 'widevine'> & { widevine?: Partial<DrmSettings['widevine']> };
+  drm?: Omit<Partial<DrmSettings>, 'widevine' | 'playready'> & {
+    widevine?: Partial<DrmSettings['widevine']>;
+    playready?: Partial<DrmSettings['playready']>;
+  };
 }
 
 const GOOGLE_WIDEVINE_TEST = 'https://cwip-shaka-proxy.appspot.com/no_auth';
+/** Microsoft's public PlayReady test server; the cfg query sets the license policy. */
+const MS_PLAYREADY_TEST = 'https://test.playready.microsoft.com/service/rightsmanager.asmx';
 
 /** Resolves a path inside /public against the app's base URL. */
 const local = (path: string) => new URL(`${import.meta.env.BASE_URL}${path}`, window.location.href).toString();
@@ -45,6 +50,20 @@ export function presets(): Preset[] {
       name: 'Angel One — HLS Widevine (Google test license server)',
       url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine-hls/hls.m3u8',
       drm: { mode: 'widevine', widevine: { licenseUrl: GOOGLE_WIDEVINE_TEST } },
+    },
+    {
+      group: 'DRM (PlayReady test)',
+      name: 'Tears of Steel — DASH PlayReady (Microsoft test server)',
+      url: 'https://test.playready.microsoft.com/media/profficialsite/tearsofsteel_4k.ism/manifest.mpd',
+      notes: 'Edge on Windows (also Chrome/Firefox on Windows with hardware PlayReady). Fills the DRM settings with Microsoft\'s public PlayReady test server.',
+      drm: { mode: 'playready', playready: { licenseUrl: `${MS_PLAYREADY_TEST}?cfg=(persist:false,sl:150)` } },
+    },
+    {
+      group: 'DRM (PlayReady test)',
+      name: 'Big Buck Bunny — HLS PlayReady, CBCS (Microsoft test server)',
+      url: 'https://test.playready.microsoft.com/media/dash/APPLEENC_CBCS_BBB_1080p/1080p_alternate.m3u8',
+      notes: 'HLS fMP4 with CBCS encryption: needs PlayReady 4.0 or later (current Windows).',
+      drm: { mode: 'playready', playready: { licenseUrl: `${MS_PLAYREADY_TEST}?cfg=(persist:false,ck:W31bfVt9W31bfVt9W31bfQ==,ckt:aescbc)` } },
     },
     { group: 'Live', name: 'DASH-IF livesim2 — live DASH with SCTE-35 emsg', url: 'https://livesim2.dashif.org/livesim2/scte35_2/testpic_2s/Manifest.mpd' },
     { group: 'Live', name: 'DASH-IF livesim2 — live DASH', url: 'https://livesim2.dashif.org/livesim2/testpic_2s/Manifest.mpd' },

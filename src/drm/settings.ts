@@ -4,15 +4,16 @@
  * body is wrapped and where the license sits in the response.
  */
 
-export type DrmMode = 'off' | 'auto' | 'widevine' | 'fairplay';
+export type DrmMode = 'off' | 'auto' | 'widevine' | 'playready' | 'fairplay';
 
-/** How the CDM's license request (Widevine challenge / FairPlay SPC) is sent. */
+/** How the CDM's license request (Widevine/PlayReady challenge, FairPlay SPC) is sent. */
 export type RequestFormat = 'raw' | 'base64' | 'form' | 'json';
 
 /** Where the license (Widevine license / FairPlay CKC) is in the response. */
 export type ResponseFormat = 'auto' | 'raw' | 'base64' | 'ckc-tags' | 'json';
 
 export type WidevineLevel = 'auto' | 'hw' | 'sw';
+export type PlayReadyLevel = 'auto' | 'sl3000' | 'sl2000';
 export type ContentIdSource = 'skd-host' | 'skd-uri' | 'key-id' | 'custom';
 export type SafariPlayback = 'auto' | 'mse' | 'native';
 
@@ -30,6 +31,12 @@ export interface WidevineSettings extends LicenseFormat {
   level: WidevineLevel;
 }
 
+export interface PlayReadySettings extends LicenseFormat {
+  /** Empty: the license URL in the stream's PlayReady header (LA_URL) is used. */
+  licenseUrl: string;
+  level: PlayReadyLevel;
+}
+
 export interface FairPlaySettings extends LicenseFormat {
   licenseUrl: string;
   certificateUrl: string;
@@ -44,6 +51,7 @@ export interface FairPlaySettings extends LicenseFormat {
 export interface DrmSettings {
   mode: DrmMode;
   widevine: WidevineSettings;
+  playready: PlayReadySettings;
   fairplay: FairPlaySettings;
   /** "Name: value" lines, sent with license and certificate requests. */
   headers: string;
@@ -68,6 +76,14 @@ export interface DrmProfile {
 export const DEFAULT_DRM: DrmSettings = {
   mode: 'off',
   widevine: {
+    licenseUrl: '',
+    level: 'auto',
+    requestFormat: 'raw',
+    template: '{"challenge":"{{challenge}}"}',
+    responseFormat: 'auto',
+    responseField: 'license',
+  },
+  playready: {
     licenseUrl: '',
     level: 'auto',
     requestFormat: 'raw',
@@ -102,6 +118,21 @@ export const WIDEVINE_ROBUSTNESS: Record<WidevineLevel, { video: string[]; audio
   sw: { video: ['SW_SECURE_DECODE', 'SW_SECURE_CRYPTO'], audio: ['SW_SECURE_CRYPTO'] },
 };
 
+/** PlayReady video robustness strings (security levels), best first. */
+export const PLAYREADY_ROBUSTNESS: Record<PlayReadyLevel, string[]> = {
+  auto: ['3000', '2000'],
+  sl3000: ['3000'],
+  sl2000: ['2000'],
+};
+
+/** Human label for a PlayReady key system / robustness. */
+export function playReadyLevelName(keySystem: string, robustness: string): string {
+  if (robustness === '3000' || keySystem.endsWith('.3000') || keySystem.endsWith('.hardware')) return 'SL3000 (hardware)';
+  if (robustness === '2000' || keySystem.endsWith('.software')) return 'SL2000 (software)';
+  if (robustness === '150') return 'SL150 (test)';
+  return '';
+}
+
 /** Human label for a Widevine robustness string. */
 export function widevineLevelName(robustness: string): string {
   if (!robustness) return '';
@@ -117,12 +148,19 @@ export function normaliseDrm(value: unknown): DrmSettings {
     ...DEFAULT_DRM,
     ...v,
     widevine: { ...DEFAULT_DRM.widevine, ...(v.widevine ?? {}) },
+    playready: { ...DEFAULT_DRM.playready, ...(v.playready ?? {}) },
     fairplay: { ...DEFAULT_DRM.fairplay, ...(v.fairplay ?? {}) },
   };
 }
 
+/** PlayReady mode works without a URL too: the stream's own license URL is used. */
+export const usesPlayReady = (s: DrmSettings): boolean =>
+  s.mode === 'playready' || (s.mode === 'auto' && Boolean(s.playready.licenseUrl.trim()));
+
 export const isDrmConfigured = (s: DrmSettings): boolean =>
-  Boolean(s.testKeySystem) || (s.mode !== 'off' && Boolean(s.widevine.licenseUrl.trim() || s.fairplay.licenseUrl.trim()));
+  Boolean(s.testKeySystem) ||
+  usesPlayReady(s) ||
+  (s.mode !== 'off' && Boolean(s.widevine.licenseUrl.trim() || s.fairplay.licenseUrl.trim()));
 
 // ------------------------------------------------------------- storage
 

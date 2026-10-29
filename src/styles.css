@@ -1558,7 +1558,7 @@ pre .hl {
 
 .drm-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -1673,6 +1673,15 @@ pre .hl {
 
 .drm-declared td .mono {
   white-space: pre-line;
+}
+
+.drm-stream-url {
+  margin-top: 4px;
+  font-size: 0.85em;
+}
+
+.drm-stream-url button {
+  margin-left: 6px;
 }
 
 @media (max-width: 900px) {

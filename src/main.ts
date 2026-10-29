@@ -2,7 +2,7 @@ import './styles.css';
 import { AudioEngine } from './audio/engine';
 import { PlayerController, describeShakaError } from './player/controller';
 import { AudioOverlay } from './ui/audio/overlay';
-import { drmHint } from './drm/errors';
+import { drmHint, drmUnavailableHint } from './drm/errors';
 import { isDrmConfigured, normaliseDrm } from './drm/settings';
 import { DrmPanel } from './ui/drm/panel';
 import { presets, type Preset } from './presets';
@@ -92,7 +92,7 @@ const drmPanel = new DrmPanel($('#drm-panel'), {
 function renderDrmButton() {
   const s = drmPanel.settings;
   const on = isDrmConfigured(s);
-  drmBtn.innerHTML = `${icons.lock}<span>${on ? ({ auto: 'DRM auto', widevine: 'Widevine', fairplay: 'FairPlay', off: 'DRM' } as const)[s.mode] : 'DRM'}</span>`;
+  drmBtn.innerHTML = `${icons.lock}<span>${on ? ({ auto: 'DRM auto', widevine: 'Widevine', playready: 'PlayReady', fairplay: 'FairPlay', off: 'DRM' } as const)[s.mode] : 'DRM'}</span>`;
   drmBtn.classList.toggle('active', on);
 }
 function toggleDrmPanel(open?: boolean) {
@@ -124,7 +124,12 @@ presetSel.addEventListener('change', () => {
   if (preset?.drm) {
     // DRM test streams fill in their license server.
     const base = normaliseDrm(drmPanel.settings);
-    drmPanel.setSettings({ ...base, ...preset.drm, widevine: { ...base.widevine, ...preset.drm.widevine } } as typeof base);
+    drmPanel.setSettings({
+      ...base,
+      ...preset.drm,
+      widevine: { ...base.widevine, ...preset.drm.widevine },
+      playready: { ...base.playready, ...preset.drm.playready },
+    } as typeof base);
     showToast('DRM settings filled in for this test stream');
   }
   void load(urlInput.value);
@@ -172,7 +177,14 @@ const resetAudioOnTrackChange = () => {
 ctrl.on('reset', () => audio.clearStream());
 ctrl.on('loaded', resetAudioOnTrackChange);
 ctrl.on('tracks', resetAudioOnTrackChange);
-const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, () => toggleDrmPanel(true));
+const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, {
+  open: () => toggleDrmPanel(true),
+  useLicenseUrl: (system, url) => {
+    drmPanel.useLicenseUrl(system, url);
+    toggleDrmPanel(true);
+    showToast(`License URL from the stream set for ${system === 'playready' ? 'PlayReady' : 'Widevine'}: reload the stream to use it`);
+  },
+});
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
 
 function renderOverlay() {
@@ -266,7 +278,7 @@ function hintFor(err: unknown, url: string): string {
     );
   }
   if (code === 4032 || code === 4040) hints.push('The stream uses codecs this browser cannot decode — see the Device tab.');
-  const drm = drmHint(err);
+  const drm = code && code >= 6000 && code < 7000 && ctrl.unavailableDrm ? drmUnavailableHint(ctrl.unavailableDrm) : drmHint(err);
   if (drm) hints.push(drm);
   if (drm || (code && code >= 6000 && code < 7000)) hints.push('Details are in the DRM tab.');
   return hints.join(' ');
