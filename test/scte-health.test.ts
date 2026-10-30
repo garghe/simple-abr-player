@@ -265,3 +265,41 @@ describe('builder outputs', () => {
     expect(() => encodeScte35(formToSpec({ ...base, descriptors: [{ ...d, upid: '0xabc' }] }))).toThrow(/even number/);
   });
 });
+
+describe('structure, CSV and counts', () => {
+  const sig = (typeId: number, eventId: number, duration?: number, upid?: string, upidType?: number) =>
+    `#EXT-OATCLS-SCTE35:${toBase64(encodeScte35({ command: { type: 'time_signal', pts: 0 }, descriptors: [{ eventId, typeId, duration: duration && ticks(duration), upid, upidType }] }))}`;
+
+  it('nests programme > break > placement opportunity > ad', async () => {
+    const { buildStructure } = await import('../src/scte/structure');
+    const m = vodMonitor([
+      'https://x/v.m3u8',
+      playlist(40, { 0: [sig(0x10, 1, 70)], 5: [sig(0x22, 2, 20)], 6: [sig(0x34, 3, 16)], 7: [sig(0x30, 4, 6, 'ABCD0123456H', 0x03)], 16: [sig(0x22, 5, 4)] }),
+    ]);
+    const roots = buildStructure(m.list(), 80);
+    const shape = (n: { span: { lane: string }; children: unknown[] }): unknown => [n.span.lane, (n.children as never[]).map(shape)];
+    expect(roots.map(shape)).toEqual([['programme', [['break', [['po', [['ad', []]]]]], ['break', []]]]]);
+    expect(roots[0].children[0].children[0].children[0].span.label).toContain('Ad-ID: ABCD0123456H');
+  });
+
+  it('exports CSV with escaping and counts markers per hour', async () => {
+    const { markersToCsv, hourlyCounts } = await import('../src/scte/csv');
+    const m = vodMonitor(['https://x/v.m3u8', playlist(10, { 2: ['#EXT-X-CUE-OUT:DURATION=8', '#EXT-X-DATERANGE:ID="a,b",START-DATE="2026-01-01T00:00:00Z"'], 5: ['#EXT-X-CUE-IN'] })]);
+    const csv = markersToCsv(m.list(), health(m), () => null).split('\r\n');
+    expect(csv[0].split(',')[0]).toBe('presentation_time_s');
+    const out = csv.find((r) => r.includes('HLS CUE-OUT'))!;
+    expect(out.startsWith('4.000,,')).toBe(true);
+    expect(out).toContain('HLS CUE-OUT,out');
+    expect(out).toContain('warn: Break length differs from the advertised duration');
+    expect(csv.find((r) => r.includes('HLS DATERANGE'))).toContain('"#EXT-X-DATERANGE:ID=""a,b"",START-DATE=""2026-01-01T00:00:00Z"""');
+    expect(hourlyCounts(m.list(), false)).toEqual([{ hour: '00:00–01:00', out: 1, in: 1, other: 1 }]);
+  });
+
+  it('formats TI and MPU UPIDs', () => {
+    const s = parseScte35(
+      encodeScte35({ command: { type: 'time_signal', pts: 0 }, descriptors: [{ eventId: 1, typeId: 0x10, upidType: 0x08, upid: '0x0000000000000100' }, { eventId: 2, typeId: 0x10, upidType: 0x0c, upid: '0x41424344ff01' }] }),
+    );
+    expect((s.descriptors[0] as { upid: string }).upid).toBe('256 (0x0000000000000100)');
+    expect((s.descriptors[1] as { upid: string }).upid).toBe('[ABCD] 0xff01');
+  });
+});

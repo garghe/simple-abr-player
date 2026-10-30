@@ -24,7 +24,7 @@ describe('parseScte35 — published samples', () => {
     expect(d.segmentationTypeName).toBe('Provider Placement Opportunity Start');
     expect(d.segmentationDuration).toBe(0x0001a599b0);
     expect(d.upidTypeName).toBe('TI (AiringID)');
-    expect(d.upid).toBe('0x000000002ca0a18a');
+    expect(d.upid).toBe('748724618 (0x000000002ca0a18a)');
     expect(d.segmentNum).toBe(2);
     expect(cueDirection(s)).toBe('out');
     expect(cueDuration(s)).toBeCloseTo(307, 0);

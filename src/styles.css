@@ -1998,3 +1998,71 @@ ul.issues li {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ---- SCTE structure and monitor ---- */
+.structure-tree,
+.structure-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.structure-tree {
+  padding-left: 0;
+}
+
+.structure-tree ul {
+  border-left: 1px dashed var(--border);
+  margin-left: 6px;
+}
+
+.structure-item {
+  padding: 4px 6px;
+  margin: 3px 0;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.structure-item.programme {
+  border-left-color: var(--accent);
+}
+
+.structure-item.chapter {
+  border-left-color: #14b8a6;
+}
+
+.structure-item.breaks,
+.structure-item.break,
+.structure-item.ad {
+  border-left-color: var(--ad);
+}
+
+.structure-item.po {
+  border-left-color: #a78bfa;
+}
+
+.structure-item.promo {
+  border-left-color: #f472b6;
+}
+
+.structure-kind {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  min-width: 7.5em;
+}
+
+.monitor-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 6px 0 10px;
+}
