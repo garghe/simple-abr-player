@@ -1,5 +1,6 @@
 import shaka from 'shaka-player';
-import { parseHlsCues, type HlsCue } from '../scte/hls-cues';
+import { parseHlsCues, parseMasterPlaylist, type HlsCue } from '../scte/hls-cues';
+import { checkScteHealth, type HealthIssue } from '../scte/health';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
 import { initProtectionToDeclared, parseHlsProtection, parseMpdProtection, scanInitSegment } from '../drm/inspect';
@@ -131,6 +132,12 @@ export class PlayerController extends EventTarget {
     // can be styled and moved clear of the control bar.
     if (container) this.player.setVideoContainer(container);
     this.scte.setHlsResolver((cue) => this.resolveHlsCueTime(cue));
+    this.scte.setContext(() => ({
+      live: Boolean(this.loadedUrl) && this.player.isLive(),
+      availabilityEnd: this.availabilityEnd(),
+      bufferEnd: this.bufferEnd(),
+      segmentAt: (t) => this.videoSegmentAt(t),
+    }));
     this.installFilters();
     this.installEvents();
   }
@@ -497,8 +504,12 @@ export class PlayerController extends EventTarget {
     const protection = kind === 'MPD' ? parseMpdProtection(text) : kind === 'Manifest' ? [] : parseHlsProtection(text);
     if (protection.length) this.drm.addDeclared(protection);
 
+    if (kind === 'Master playlist') {
+      for (const m of parseMasterPlaylist(text, uri)) this.scte.setPlaylistLabel(m.uri, m.label, m.kind);
+    }
     if (kind === 'Media playlist') {
       const info = parseHlsCues(text, uri);
+      this.scte.notePlaylist(uri, info);
       if (info.cues.length) this.scte.addHlsCues(info.cues);
     }
   }
@@ -577,6 +588,49 @@ export class PlayerController extends EventTarget {
       ...region,
       payload: binary,
       xmlSummary: region.eventNode ? xmlSummary(region.eventNode) : undefined,
+    });
+  }
+
+  /** Newest media time the stream offers (the live edge), or null before load. */
+  availabilityEnd(): number | null {
+    const timeline = this.loadedUrl ? this.player.getManifest()?.presentationTimeline : null;
+    const end = timeline?.getSegmentAvailabilityEnd();
+    return end !== undefined && Number.isFinite(end) ? end : null;
+  }
+
+  private bufferEnd(): number | null {
+    const ranges = this.player.getBufferedInfo().total;
+    return ranges.length ? ranges[ranges.length - 1].end : null;
+  }
+
+  /** The video segment of the playing variant that contains a presentation time. */
+  videoSegmentAt(time: number): { start: number; end: number } | null {
+    const manifest = this.loadedUrl ? this.player.getManifest() : null;
+    const activeId = this.player.getVariantTracks().find((t) => t.active)?.id;
+    const variant = manifest?.variants.find((v) => v.id === activeId) ?? manifest?.variants[0];
+    const index = variant?.video?.segmentIndex;
+    if (!index) return null;
+    const pos = index.find(time);
+    const ref = pos === null ? null : index.get(pos);
+    return ref ? { start: ref.getStartTime(), end: ref.getEndTime() } : null;
+  }
+
+  /** Wall-clock time of a presentation time (live, or streams with a program date time). */
+  wallClockAt(time: number): Date | null {
+    const start = this.loadedUrl ? this.player.getPresentationStartTimeAsDate() : null;
+    return start ? new Date(start.getTime() + time * 1000) : null;
+  }
+
+  /** Health checks over the markers seen so far. */
+  scteHealth(minLead?: number): HealthIssue[] {
+    const live = Boolean(this.loadedUrl) && this.player.isLive();
+    const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
+    return checkScteHealth(this.scte.list(), {
+      live,
+      horizon: !this.loadedUrl ? null : live ? this.availabilityEnd() : Number.isFinite(this.video.duration) ? this.video.duration : null,
+      playlists: [...this.scte.playlists.values()],
+      minLead,
+      frameDuration: fps ? 1 / fps : undefined,
     });
   }
 

@@ -34,6 +34,10 @@ export interface HlsCue {
   mediaSequence: number;
   /** Wall-clock time of the cue (DATERANGE START-DATE or segment PDT). */
   date?: Date;
+  /** Program date time of the segment the tag applies to. */
+  segmentDate?: Date;
+  /** The media playlist the tag was found in. */
+  playlistUri?: string;
   /** SCTE-35 payload (hex or base64) when the tag carries one. */
   scte35?: string;
   /** Which SCTE35-* attribute carried the payload. */
@@ -45,12 +49,27 @@ export interface HlsCue {
   id?: string;
 }
 
+export interface HlsSegment {
+  uri: string;
+  duration: number;
+  /** Seconds from the start of the playlist. */
+  offset: number;
+  sequence: number;
+  /** Program date time. */
+  date?: Date;
+  /** An EXT-X-DISCONTINUITY comes before this segment. */
+  discontinuity: boolean;
+}
+
 export interface HlsPlaylistInfo {
   isMaster: boolean;
   isLive: boolean;
   targetDuration?: number;
   mediaSequence: number;
   cues: HlsCue[];
+  segments: HlsSegment[];
+  /** Sum of the segment durations. */
+  totalDuration: number;
 }
 
 /** Parses an attribute list like `ID="a",DURATION=30,SCTE35-OUT=0xFC..`. */
@@ -85,6 +104,8 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
     isLive: true,
     mediaSequence: 0,
     cues: [],
+    segments: [],
+    totalDuration: 0,
   };
   if (!lines[0]?.startsWith('#EXTM3U')) return info;
 
@@ -93,12 +114,14 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
   let segDuration = 0;
   let sequence = 0;
   let pdt: Date | undefined;
+  let discontinuity = false;
 
   const flush = (segmentUri: string) => {
     for (const cue of pending) {
       cue.segmentUri = segmentUri;
       cue.playlistOffset = offset;
       cue.mediaSequence = sequence;
+      if (pdt) cue.segmentDate = new Date(pdt.getTime());
       if (!cue.date && pdt) cue.date = new Date(pdt.getTime());
       info.cues.push(cue);
     }
@@ -106,14 +129,24 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
   };
 
   const add = (cue: Omit<HlsCue, 'playlistOffset' | 'mediaSequence'>) =>
-    pending.push({ ...cue, playlistOffset: offset, mediaSequence: sequence });
+    pending.push({ ...cue, playlistOffset: offset, mediaSequence: sequence, playlistUri });
 
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
 
     if (!line.startsWith('#')) {
-      flush(resolveUri(line, playlistUri));
+      const uri = resolveUri(line, playlistUri);
+      flush(uri);
+      info.segments.push({
+        uri,
+        duration: segDuration,
+        offset,
+        sequence,
+        date: pdt ? new Date(pdt.getTime()) : undefined,
+        discontinuity,
+      });
+      discontinuity = false;
       offset += segDuration;
       if (pdt) pdt = new Date(pdt.getTime() + segDuration * 1000);
       segDuration = 0;
@@ -128,6 +161,9 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
     switch (name) {
       case '#EXT-X-STREAM-INF':
         info.isMaster = true;
+        break;
+      case '#EXT-X-DISCONTINUITY':
+        discontinuity = true;
         break;
       case '#EXT-X-ENDLIST':
         info.isLive = false;
@@ -212,10 +248,44 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
         break;
     }
   }
+  info.totalDuration = offset;
   // Tags after the last segment (e.g. a CUE-IN at the live edge).
   for (const cue of pending) {
     if (!cue.date && pdt) cue.date = new Date(pdt.getTime());
     info.cues.push(cue);
   }
   return info;
+}
+
+export interface MasterEntry {
+  uri: string;
+  label: string;
+  kind: 'video' | 'audio' | 'subtitles' | 'unknown';
+}
+
+/** Names the media playlists of a master playlist (variants and EXT-X-MEDIA renditions). */
+export function parseMasterPlaylist(text: string, playlistUri: string): MasterEntry[] {
+  const out: MasterEntry[] = [];
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('#EXT-X-STREAM-INF:')) {
+      const a = parseAttributeList(line.slice(18));
+      const uri = lines.slice(i + 1).find((l) => l && !l.startsWith('#'));
+      if (!uri) continue;
+      const audioOnly = !a.RESOLUTION && a.CODECS !== undefined && !/avc|hvc|hev|vp0?9|av01|dvh/i.test(a.CODECS);
+      const bw = a.BANDWIDTH ? `${Math.round(Number(a.BANDWIDTH) / 1000)} kbps` : '';
+      out.push({
+        uri: resolveUri(uri, playlistUri),
+        kind: audioOnly ? 'audio' : 'video',
+        label: [audioOnly ? 'audio' : 'video', a.RESOLUTION?.replace('x', '×'), bw].filter(Boolean).join(' '),
+      });
+    } else if (line.startsWith('#EXT-X-MEDIA:')) {
+      const a = parseAttributeList(line.slice(13));
+      if (!a.URI) continue;
+      const kind = a.TYPE === 'AUDIO' ? 'audio' : a.TYPE === 'SUBTITLES' || a.TYPE === 'CLOSED-CAPTIONS' ? 'subtitles' : a.TYPE === 'VIDEO' ? 'video' : 'unknown';
+      out.push({ uri: resolveUri(a.URI, playlistUri), kind, label: [kind, a.NAME ?? a.LANGUAGE].filter(Boolean).join(' ') });
+    }
+  }
+  return out;
 }

@@ -1,4 +1,4 @@
-import type { HlsCue } from './hls-cues';
+import type { HlsCue, HlsPlaylistInfo } from './hls-cues';
 import {
   cueDirection,
   cueDuration,
@@ -41,6 +41,48 @@ export interface ScteEvent {
   meta: Record<string, string | number | undefined>;
   /** HLS only: used to resolve the presentation time later. */
   hls?: HlsCue;
+  /** HLS: every media playlist the tag was found in. */
+  seenIn: string[];
+  /** Player state when the marker was first seen (for the lead time). */
+  observed?: { live: boolean; availabilityEnd: number | null; bufferEnd: number | null };
+  /** Where the marker falls relative to the video segment that contains it. */
+  alignment?: SegmentAlignment;
+  /** HLS CUE-OUT-CONT tags of this break: elapsed time they state vs the time actually elapsed. */
+  contChecks?: { elapsed: number; actual: number; tag: string }[];
+}
+
+export interface SegmentAlignment {
+  segmentStart: number;
+  segmentEnd: number;
+  /** Seconds after the start of the segment (0 = on the boundary). */
+  offset: number;
+}
+
+/** What the player can tell the monitor about the stream (set by the controller). */
+export interface MonitorContext {
+  live: boolean;
+  /** Newest media time available (live edge), or null. */
+  availabilityEnd: number | null;
+  /** End of the buffered media. */
+  bufferEnd: number | null;
+  /** Video segment containing a presentation time. */
+  segmentAt(time: number): { start: number; end: number } | null;
+}
+
+export type PlaylistKind = 'video' | 'audio' | 'subtitles' | 'unknown';
+
+/** A media playlist and the part of the timeline it has listed so far. */
+export interface PlaylistCoverage {
+  uri: string;
+  label: string;
+  kind: PlaylistKind;
+  /** Covered wall-clock range (playlists with PROGRAM-DATE-TIME). */
+  firstDate?: number;
+  lastDate?: number;
+  /** Covered playlist-offset range (VOD playlists). */
+  duration?: number;
+  live: boolean;
+  targetDuration?: number;
 }
 
 export interface ActiveBreak {
@@ -87,20 +129,71 @@ export class ScteMonitor {
   private listeners = new Set<Listener>();
   private seq = 0;
   private hlsResolver: HlsTimeResolver | null = null;
+  private context: (() => MonitorContext) | null = null;
+  readonly playlists = new Map<string, PlaylistCoverage>();
+  private labels = new Map<string, { label: string; kind: PlaylistKind }>();
 
   onChange(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
 
+  /** Increases on every change (for caching derived views). */
+  version = 0;
+
   private emit() {
+    this.version++;
     for (const fn of this.listeners) fn();
   }
 
   clear() {
     this.events.clear();
+    this.playlists.clear();
+    this.labels.clear();
     this.seq = 0;
     this.emit();
+  }
+
+  setContext(fn: (() => MonitorContext) | null) {
+    this.context = fn;
+  }
+
+  /** Names a media playlist (from the master playlist), e.g. "video 1280×720". */
+  setPlaylistLabel(uri: string, label: string, kind: PlaylistKind) {
+    this.labels.set(uri, { label, kind });
+    const p = this.playlists.get(uri);
+    if (p) Object.assign(p, { label, kind });
+  }
+
+  /** Records which part of the timeline a media playlist lists (for missing-marker checks). */
+  notePlaylist(uri: string, info: HlsPlaylistInfo) {
+    if (info.isMaster || !info.segments.length) return;
+    const named = this.labels.get(uri);
+    const p = this.playlists.get(uri) ?? {
+      uri,
+      label: named?.label ?? shortName(uri),
+      kind: named?.kind ?? 'unknown',
+      live: info.isLive,
+    };
+    p.live = info.isLive;
+    p.targetDuration = info.targetDuration;
+    const first = info.segments[0];
+    const last = info.segments[info.segments.length - 1];
+    if (first.date && last.date) {
+      const start = first.date.getTime();
+      const end = last.date.getTime() + last.duration * 1000;
+      p.firstDate = p.firstDate === undefined ? start : Math.min(p.firstDate, start);
+      p.lastDate = p.lastDate === undefined ? end : Math.max(p.lastDate, end);
+    }
+    if (!info.isLive) p.duration = info.totalDuration;
+    this.playlists.set(uri, p);
+  }
+
+  /** Marks where the marker sits within its video segment, once its time is known. */
+  private align(e: ScteEvent) {
+    if (e.alignment || e.startTime === null || !this.context) return;
+    const seg = this.context().segmentAt(e.startTime);
+    if (seg) e.alignment = { segmentStart: seg.start, segmentEnd: seg.end, offset: e.startTime - seg.start };
   }
 
   setHlsResolver(fn: HlsTimeResolver | null) {
@@ -119,9 +212,18 @@ export class ScteMonitor {
     return this.events.size;
   }
 
-  private add(e: Omit<ScteEvent, 'seq' | 'receivedAt'>): boolean {
+  private add(e: Omit<ScteEvent, 'seq' | 'receivedAt' | 'seenIn'> & { seenIn?: string[] }): boolean {
     if (this.events.has(e.key)) return false;
-    this.events.set(e.key, { ...e, seq: ++this.seq, receivedAt: new Date() });
+    const ctx = this.context?.();
+    const event: ScteEvent = {
+      ...e,
+      seenIn: e.seenIn ?? [],
+      seq: ++this.seq,
+      receivedAt: new Date(),
+      observed: ctx ? { live: ctx.live, availabilityEnd: ctx.availabilityEnd, bufferEnd: ctx.bufferEnd } : undefined,
+    };
+    this.align(event);
+    this.events.set(e.key, event);
     this.emit();
     return true;
   }
@@ -219,10 +321,19 @@ export class ScteMonitor {
           summary = 'CUE-OUT';
           break;
         case 'CUE-OUT-CONT': {
-          // Only useful when joining mid-break: synthesise the OUT it implies.
+          // Synthesises the OUT it implies when joining mid-break; otherwise
+          // checks the elapsed time it states against its CUE-OUT.
           if (cue.elapsed === undefined) continue;
           const startOffset = cue.playlistOffset - cue.elapsed;
           const startDate = cue.date ? new Date(cue.date.getTime() - cue.elapsed * 1000) : undefined;
+          const out = this.cueOutBefore(cue);
+          if (out?.hls) {
+            const actual = cue.date && out.hls.date ? (cue.date.getTime() - out.hls.date.getTime()) / 1000 : cue.playlistOffset - out.hls.playlistOffset;
+            const checks = (out.contChecks ??= []);
+            if (actual >= 0 && checks.length < 200 && !checks.some((c) => c.tag === cue.tag && Math.abs(c.actual - actual) < 0.01)) {
+              checks.push({ elapsed: cue.elapsed, actual, tag: cue.tag });
+            }
+          }
           const hasOut = [...this.events.values()].some(
             (e) =>
               e.direction === 'out' &&
@@ -262,7 +373,14 @@ export class ScteMonitor {
           summary = 'EXT-X-SPLICEPOINT-SCTE35';
           break;
       }
-      if (this.events.has(key)) continue;
+      const existing = this.events.get(key);
+      if (existing) {
+        if (cue.playlistUri && !existing.seenIn.includes(cue.playlistUri)) {
+          existing.seenIn.push(cue.playlistUri);
+          this.emit();
+        }
+        continue;
+      }
       const d = decode(cue.scte35);
       this.add({
         key,
@@ -281,8 +399,22 @@ export class ScteMonitor {
           mediaSequence: cue.mediaSequence,
         },
         hls: cue,
+        seenIn: cue.playlistUri ? [cue.playlistUri] : [],
       });
     }
+  }
+
+  /** The latest HLS CUE-OUT at or before a CUE-OUT-CONT (same playlist timeline). */
+  private cueOutBefore(cue: HlsCue): ScteEvent | undefined {
+    let best: ScteEvent | undefined;
+    for (const e of this.events.values()) {
+      if (e.source !== 'HLS CUE-OUT' || !e.hls) continue;
+      const before = cue.date && e.hls.date ? e.hls.date <= cue.date : e.hls.playlistOffset <= cue.playlistOffset;
+      if (!before) continue;
+      const t = (x: ScteEvent) => x.hls!.date?.getTime() ?? x.hls!.playlistOffset;
+      if (!best || t(e) > t(best)) best = e;
+    }
+    return best;
   }
 
   /** Retries presentation-time resolution for HLS cues that had none. */
@@ -296,6 +428,10 @@ export class ScteMonitor {
           e.startTime = t;
           changed = true;
         }
+      }
+      if (!e.alignment && e.startTime !== null) {
+        this.align(e);
+        if (e.alignment) changed = true;
       }
     }
     if (changed) this.emit();
@@ -315,5 +451,15 @@ export class ScteMonitor {
     }
     if (current?.end !== undefined) current.remaining = Math.max(0, current.end - time);
     return current;
+  }
+}
+
+/** Last two path parts of a URI, e.g. "720p/index.m3u8". */
+function shortName(uri: string): string {
+  try {
+    const parts = new URL(uri).pathname.split('/').filter(Boolean);
+    return parts.slice(-2).join('/') || uri;
+  } catch {
+    return uri;
   }
 }
