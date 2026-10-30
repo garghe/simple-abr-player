@@ -220,3 +220,21 @@ describe('timing', () => {
     expect(issues[0].detail).toContain('2.00 s later');
   });
 });
+
+describe('timeline lanes', () => {
+  it('builds break and segmentation spans, open ones to the edge', async () => {
+    const { buildTimeline } = await import('../src/scte/timeline');
+    const sig = (typeId: number, eventId: number, duration?: number) =>
+      `#EXT-OATCLS-SCTE35:${toBase64(encodeScte35({ command: { type: 'time_signal', pts: 0 }, descriptors: [{ eventId, typeId, duration: duration && ticks(duration) }] }))}`;
+    const m = vodMonitor([
+      'https://x/v.m3u8',
+      playlist(30, { 1: [sig(0x10, 1)], 2: ['#EXT-X-CUE-OUT:DURATION=8'], 6: ['#EXT-X-CUE-IN'], 10: [sig(0x34, 2, 6)], 13: [sig(0x35, 2)], 20: [sig(0x30, 3, 4)] }),
+    ]);
+    const { spans } = buildTimeline(m.list(), 60);
+    const byLane = (l: string) => spans.filter((s) => s.lane === l).map((s) => [s.start, s.end, s.open]);
+    expect(byLane('breaks')).toEqual([[4, 12, false]]);
+    expect(byLane('programme')).toEqual([[2, 60, true]]);
+    expect(byLane('po')).toEqual([[20, 26, false]]);
+    expect(byLane('ad')).toEqual([[40, 44, false]]);
+  });
+});

@@ -6,6 +6,7 @@ import { markerTiming } from '../../scte/timing';
 import { badge, dataTable, h, kvTable } from '../dom';
 import { clock, formatTime } from '../format';
 import { HealthCache, HealthView, SEVERITY_BADGE, countBySeverity, severitySummary } from '../scte/health';
+import { TimelineView } from '../scte/timeline';
 
 const DIRECTION_LABEL = { out: 'OUT', in: 'IN', other: 'INFO' } as const;
 
@@ -69,6 +70,7 @@ export class ScteTab {
       render: () => this.renderMarkers(),
     };
     const healthView = new HealthView(ctrl, this.health, (key) => this.selectKey(key));
+    const timeline = new TimelineView(ctrl, this.health, (key) => this.selectKey(key));
     this.views = [
       markers,
       {
@@ -81,6 +83,7 @@ export class ScteTab {
           return c.error ? badge(String(c.error), 'warn') : c.warn ? badge(String(c.warn), 'out') : '';
         },
       },
+      { id: 'timeline', label: 'Timeline', el: timeline.el, render: () => timeline.render() },
     ];
     this.active = markers;
     for (const v of this.views) {

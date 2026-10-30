@@ -43,7 +43,7 @@ const hex = (n: number) => `0x${n.toString(16).padStart(2, '0')}`;
 const typeName = (id: number) => `${SEGMENTATION_TYPES[id] ?? 'Type'} (${hex(id)})`;
 
 /** Segmentation start types and the end types that close them. */
-const SEGMENT_PAIRS = new Map<number, number[]>([
+export const SEGMENT_PAIRS = new Map<number, number[]>([
   [0x10, [0x11, 0x12]],
   [0x20, [0x21]],
   [0x22, [0x23]],
@@ -54,7 +54,7 @@ const SEGMENT_PAIRS = new Map<number, number[]>([
 for (let t = 0x30; t <= 0x46; t += 2) SEGMENT_PAIRS.set(t, [t + 1]);
 const END_TYPES = new Set([...SEGMENT_PAIRS.values()].flat());
 
-interface Signal {
+export interface Signal {
   time: number;
   direction: 'out' | 'in';
   events: ScteEvent[];
@@ -70,7 +70,7 @@ function isBreakSignal(e: ScteEvent): boolean {
   return !e.error; // CUE-OUT / CUE-IN / DATERANGE without a payload
 }
 
-function groupSignals(events: ScteEvent[]): Signal[] {
+export function groupSignals(events: ScteEvent[]): Signal[] {
   const out: Signal[] = [];
   for (const e of events.filter(isBreakSignal).sort((a, b) => a.startTime! - b.startTime!)) {
     const dir = e.direction as 'out' | 'in';
@@ -278,7 +278,7 @@ export function checkScteHealth(all: ScteEvent[], ctx: HealthContext): HealthIss
   return issues.sort((a, b) => rank[a.severity] - rank[b.severity] || (a.time ?? Infinity) - (b.time ?? Infinity));
 }
 
-function segDescriptors(e: ScteEvent): SegmentationDescriptor[] {
+export function segDescriptors(e: ScteEvent): SegmentationDescriptor[] {
   return (e.section?.descriptors ?? []).filter((d): d is SegmentationDescriptor => d.tag === 0x02 && 'segmentationEventId' in d);
 }
 

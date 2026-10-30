@@ -43,6 +43,17 @@ export interface NetworkEntry {
   error?: string;
 }
 
+/** Playback events placed on the SCTE timeline (media time). */
+export interface PlaybackMark {
+  time: number;
+  kind: 'quality' | 'stall' | 'gap' | 'error';
+  label: string;
+  /** Stalls: seconds spent waiting. */
+  duration?: number;
+}
+
+const MAX_MARKS = 2000;
+
 export interface LogEntry {
   at: Date;
   level: 'info' | 'warn' | 'error';
@@ -104,6 +115,8 @@ export class PlayerController extends EventTarget {
   readonly scte = new ScteMonitor();
   readonly network: NetworkEntry[] = [];
   readonly log: LogEntry[] = [];
+  readonly marks: PlaybackMark[] = [];
+  private stallStart: { time: number; at: number } | null = null;
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
   readonly drm = new DrmMonitor();
@@ -263,6 +276,8 @@ export class PlayerController extends EventTarget {
     const t0 = performance.now();
     await this.player.load(options.url, options.startTime ?? null);
     this.loadedUrl = options.url;
+    const first = this.player.getVariantTracks().find((t) => t.active);
+    if (first) this.mark('quality', `${first.height ?? '?'}p @ ${Math.round(first.bandwidth / 1000)} kbps (start)`);
     const type = this.player.getManifestType();
     this.format = type === 'DASH' ? 'DASH' : type === 'HLS' ? 'HLS' : 'unknown';
     this.info(`Loaded ${this.format} ${this.player.isLive() ? 'live' : 'VOD'} stream in ${Math.round(performance.now() - t0)} ms`);
@@ -281,6 +296,8 @@ export class PlayerController extends EventTarget {
     this.network.length = 0;
     this.documents.clear();
     this.samples.length = 0;
+    this.marks.length = 0;
+    this.stallStart = null;
     this.scte.clear();
     this.format = 'unknown';
     this.usingProxy = false;
@@ -528,6 +545,7 @@ export class PlayerController extends EventTarget {
     on('error', (e) => {
       const err = (e as unknown as { detail: shaka.util.Error }).detail;
       this.error(describeShakaError(err));
+      this.mark('error', describeShakaError(err));
       this.emit('error', err);
     });
     on('trackschanged', () => this.emit('tracks'));
@@ -535,11 +553,14 @@ export class PlayerController extends EventTarget {
       this.emit('tracks');
       const v = this.player.getVariantTracks().find((t) => t.active);
       if (v) this.info(`Variant changed → ${v.width ?? '?'}x${v.height ?? '?'} @ ${Math.round(v.bandwidth / 1000)} kbps`);
+      if (v) this.mark('quality', `${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps (manual)`, this.bufferEnd() ?? undefined);
     });
     on('adaptation', () => {
       this.emit('tracks');
       const v = this.player.getVariantTracks().find((t) => t.active);
       if (v) this.info(`ABR switch → ${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps`);
+      // The new rendition starts where the buffer ends.
+      if (v) this.mark('quality', `${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps`, this.bufferEnd() ?? undefined);
     });
     on('audiotrackschanged', () => this.emit('tracks'));
     on('audiotrackchanged', () => this.emit('tracks'));
@@ -547,10 +568,21 @@ export class PlayerController extends EventTarget {
     on('abrstatuschanged', () => this.emit('tracks'));
     on('buffering', (e) => {
       const buffering = (e as unknown as { buffering: boolean }).buffering;
+      // Rebuffering after playback started (not the initial load or a seek into unbuffered media).
+      if (buffering && this.loadedUrl && !this.video.seeking && this.video.played.length) {
+        this.stallStart = { time: this.video.currentTime, at: performance.now() };
+      } else if (!buffering && this.stallStart) {
+        const waited = (performance.now() - this.stallStart.at) / 1000;
+        this.mark('stall', `Rebuffering ${waited.toFixed(1)} s`, this.stallStart.time, waited);
+        this.stallStart = null;
+      }
       this.emit('buffering', buffering);
     });
     on('stalldetected', () => this.warn('Stall detected'));
-    on('gapjumped', () => this.warn('Gap jumped'));
+    on('gapjumped', () => {
+      this.warn('Gap jumped');
+      this.mark('gap', 'Gap jumped');
+    });
     on('manifestupdated', () => this.scte.resolvePending());
     on('keystatuschanged', () => {
       this.drm.keyStatuses = this.player.getKeyStatuses();
@@ -686,6 +718,12 @@ export class PlayerController extends EventTarget {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  private mark(kind: PlaybackMark['kind'], label: string, time = this.video.currentTime, duration?: number) {
+    if (!this.loadedUrl && kind !== 'error') return;
+    this.marks.push({ time, kind, label, duration });
+    if (this.marks.length > MAX_MARKS) this.marks.shift();
+  }
 
   info(message: string) {
     this.pushLog('info', message);

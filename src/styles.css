@@ -1783,3 +1783,133 @@ ul.issues li {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ---- SCTE timeline ---- */
+.timeline-chart {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.timeline-svg {
+  display: block;
+}
+
+.timeline-svg .lane {
+  fill: transparent;
+}
+
+.timeline-svg .lane.odd {
+  fill: var(--panel-2);
+}
+
+.timeline-svg .lane-label {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.timeline-svg .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.timeline-svg .axis {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+.timeline-svg .span,
+.timeline-svg .point,
+.timeline-svg .issue,
+.timeline-svg .mark {
+  cursor: pointer;
+}
+
+.timeline-svg .span {
+  fill: var(--muted);
+  opacity: 0.85;
+}
+
+.timeline-svg .span.breaks,
+.timeline-svg .span.break,
+.timeline-svg .span.ad {
+  fill: var(--ad);
+}
+
+.timeline-svg .span.programme {
+  fill: var(--accent);
+}
+
+.timeline-svg .span.chapter {
+  fill: #14b8a6;
+}
+
+.timeline-svg .span.po {
+  fill: #a78bfa;
+}
+
+.timeline-svg .span.promo {
+  fill: #f472b6;
+}
+
+.timeline-svg .span.open {
+  opacity: 0.45;
+  stroke: currentColor;
+  stroke-dasharray: 3 3;
+}
+
+.timeline-svg .point.out {
+  fill: var(--ad);
+}
+
+.timeline-svg .point.in {
+  fill: var(--ok);
+}
+
+.timeline-svg .point.other {
+  fill: var(--info-text);
+}
+
+.timeline-svg .issue.error {
+  fill: var(--danger);
+}
+
+.timeline-svg .issue.warn {
+  fill: var(--ad);
+}
+
+.timeline-svg .issue.info {
+  fill: var(--info-text);
+}
+
+.timeline-svg .mark.quality {
+  fill: var(--accent);
+}
+
+.timeline-svg .mark.stall,
+.timeline-svg .mark.error,
+.timeline-svg .mark.gap {
+  fill: var(--danger);
+}
+
+.timeline-svg .mark-label {
+  font-size: 10px;
+  fill: var(--text);
+}
+
+.timeline-svg .playhead {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.timeline-info {
+  margin-top: 8px;
+  min-height: 1.4em;
+}
+
+.scte-nav select {
+  width: auto;
+  min-width: 5em;
+}
