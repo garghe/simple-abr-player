@@ -543,6 +543,9 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | `i` | Stats overlay on the video |
 | `a` | Audio meters on the video |
 | `l` | Jump to live edge |
+| `n` / `p` | Next / previous SCTE marker |
+| `b` | Jump to a few seconds before the next ad break (3–30 s, set in the SCTE-35 tab) |
+| `s` | Skip the current ad break (to its advertised end or its IN marker) |
 
 ---
 

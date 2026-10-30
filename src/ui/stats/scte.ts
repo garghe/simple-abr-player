@@ -45,6 +45,7 @@ export class ScteTab {
   private views: SubView[];
   private active: SubView;
   private navButtons = new Map<string, HTMLButtonElement>();
+  private navBar = h('div');
 
   constructor(private readonly ctrl: PlayerController) {
     this.health = new HealthCache(ctrl);
@@ -87,7 +88,12 @@ export class ScteTab {
       this.navButtons.set(v.id, b);
       this.nav.append(b);
     }
-    this.el.append(this.status, this.nav, ...this.views.map((v) => v.el));
+    this.el.append(this.status, this.navBar, this.nav, ...this.views.map((v) => v.el));
+  }
+
+  /** Marker / break navigation buttons, under the break status. */
+  setNavigation(toolbar: HTMLElement) {
+    this.navBar.replaceChildren(toolbar);
   }
 
   /** Adds a sub-view (timeline, structure, builder…). */

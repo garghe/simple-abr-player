@@ -28,7 +28,7 @@ export class StatsPanel {
   private tabs: Tab[];
   private active: Tab;
   private buttons = new Map<string, HTMLButtonElement>();
-  private scteTab: ScteTab;
+  readonly scteTab: ScteTab;
   private pending = false;
 
   constructor(

@@ -5,6 +5,7 @@ import { AudioOverlay } from './ui/audio/overlay';
 import { drmHint } from './drm/errors';
 import { isDrmConfigured, normaliseDrm } from './drm/settings';
 import { DrmPanel } from './ui/drm/panel';
+import { ScteNavigator } from './ui/scte/navigator';
 import { presets, type Preset } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
 import { snapshot } from './ui/stats/overview';
@@ -31,6 +32,11 @@ const autoplayInput = $('#autoplay') as HTMLInputElement;
 const message = $('#player-message');
 const spinner = $('#spinner');
 const adBanner = $('#ad-banner');
+const adBannerText = h('span');
+adBanner.append(
+  adBannerText,
+  h('button', { type: 'button', class: 'skip-break', title: 'Skip to the end of this break (s)', onclick: () => scteNav.skipBreak() }, 'Skip ›'),
+);
 const nerdOverlay = $('#nerd-overlay');
 const summary = $('#stream-summary');
 const toast = $('#toast');
@@ -173,6 +179,17 @@ ctrl.on('reset', () => audio.clearStream());
 ctrl.on('loaded', resetAudioOnTrackChange);
 ctrl.on('tracks', resetAudioOnTrackChange);
 const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, () => toggleDrmPanel(true));
+const scteNav = new ScteNavigator(ctrl, showToast);
+panel.scteTab.setNavigation(scteNav.toolbar());
+// Marker and ad-break shortcuts (the player's own keys live in Controls).
+document.addEventListener('keydown', (e) => {
+  const target = e.target as HTMLElement;
+  if (!ctrl.loadedUrl || target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const action = { n: () => scteNav.next(), p: () => scteNav.previous(), b: () => scteNav.beforeNextBreak(), s: () => scteNav.skipBreak() }[e.key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
 
 function renderOverlay() {
@@ -200,7 +217,7 @@ function renderAdBanner() {
   adBanner.hidden = !br;
   playerEl.classList.toggle('in-break', Boolean(br));
   if (br) {
-    adBanner.textContent =
+    adBannerText.textContent =
       br.remaining !== undefined ? `AD BREAK · ${Math.ceil(br.remaining)}s remaining` : `AD BREAK · since ${formatTime(br.start)}`;
     adBanner.title = br.event.summary;
   }
