@@ -1,6 +1,7 @@
 import shaka from 'shaka-player';
 import { parseHlsCues, parseMasterPlaylist, type HlsCue } from '../scte/hls-cues';
 import { checkScteHealth, type HealthIssue } from '../scte/health';
+import { dashRuns, findPods, podIssues, reportPods, type PodReport } from '../scte/ssai';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
 import { initProtectionToDeclared, parseHlsProtection, parseMpdProtection, scanInitSegment } from '../drm/inspect';
@@ -521,12 +522,20 @@ export class PlayerController extends EventTarget {
     const protection = kind === 'MPD' ? parseMpdProtection(text) : kind === 'Manifest' ? [] : parseHlsProtection(text);
     if (protection.length) this.drm.addDeclared(protection);
 
+    if (kind === 'MPD') {
+      try {
+        this.scte.noteDashRuns(dashRuns(text, uri));
+      } catch {
+        /* unusual MPD: no ad-insertion view */
+      }
+    }
     if (kind === 'Master playlist') {
       for (const m of parseMasterPlaylist(text, uri)) this.scte.setPlaylistLabel(m.uri, m.label, m.kind);
     }
     if (kind === 'Media playlist') {
       const info = parseHlsCues(text, uri);
       this.scte.notePlaylist(uri, info);
+      this.scte.noteHlsRuns(uri, info);
       if (info.cues.length) this.scte.addHlsCues(info.cues);
     }
   }
@@ -653,17 +662,34 @@ export class PlayerController extends EventTarget {
     return start ? new Date(start.getTime() + time * 1000) : null;
   }
 
-  /** Health checks over the markers seen so far. */
+  private horizon(): number | null {
+    if (!this.loadedUrl) return null;
+    if (this.player.isLive()) return this.availabilityEnd();
+    return Number.isFinite(this.video.duration) ? this.video.duration : null;
+  }
+
+  /** Inserted ad pods (SSAI / interstitials) matched with their SCTE breaks. */
+  adPods(): PodReport[] {
+    const events = this.scte.list();
+    return reportPods(findPods([...this.scte.runs.values()], events), events);
+  }
+
+  /** Health checks over the markers seen so far (ad insertion included). */
   scteHealth(minLead?: number): HealthIssue[] {
     const live = Boolean(this.loadedUrl) && this.player.isLive();
     const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
-    return checkScteHealth(this.scte.list(), {
+    const events = this.scte.list();
+    const issues = checkScteHealth(events, {
       live,
-      horizon: !this.loadedUrl ? null : live ? this.availabilityEnd() : Number.isFinite(this.video.duration) ? this.video.duration : null,
+      horizon: this.horizon(),
       playlists: [...this.scte.playlists.values()],
       minLead,
       frameDuration: fps ? 1 / fps : undefined,
     });
+    const rank = { error: 0, warn: 1, info: 2 };
+    return [...issues, ...podIssues(this.adPods(), events, this.horizon())].sort(
+      (a, b) => rank[a.severity] - rank[b.severity] || (a.time ?? Infinity) - (b.time ?? Infinity),
+    );
   }
 
   /** Map an HLS cue to presentation time. */

@@ -7,6 +7,7 @@ import { badge, dataTable, h, kvTable } from '../dom';
 import { clock, formatTime } from '../format';
 import { HealthCache, HealthView, SEVERITY_BADGE, countBySeverity, severitySummary } from '../scte/health';
 import { TimelineView } from '../scte/timeline';
+import { AdsView } from '../scte/ads';
 
 const DIRECTION_LABEL = { out: 'OUT', in: 'IN', other: 'INFO' } as const;
 
@@ -71,6 +72,7 @@ export class ScteTab {
     };
     const healthView = new HealthView(ctrl, this.health, (key) => this.selectKey(key));
     const timeline = new TimelineView(ctrl, this.health, (key) => this.selectKey(key));
+    const ads = new AdsView(ctrl, (key) => this.selectKey(key));
     this.views = [
       markers,
       {
@@ -84,6 +86,7 @@ export class ScteTab {
         },
       },
       { id: 'timeline', label: 'Timeline', el: timeline.el, render: () => timeline.render() },
+      { id: 'ads', label: 'Ad insertion', el: ads.el, render: () => ads.render(), count: () => (this.ctrl.scte.runs.size ? String(this.ctrl.adPods().length || '') : '') },
     ];
     this.active = markers;
     for (const v of this.views) {

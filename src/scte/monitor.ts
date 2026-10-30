@@ -1,4 +1,5 @@
 import type { HlsCue, HlsPlaylistInfo } from './hls-cues';
+import { hlsRuns, type ContentRun } from './ssai';
 import {
   cueDirection,
   cueDuration,
@@ -132,6 +133,9 @@ export class ScteMonitor {
   private context: (() => MonitorContext) | null = null;
   readonly playlists = new Map<string, PlaylistCoverage>();
   private labels = new Map<string, { label: string; kind: PlaylistKind }>();
+  /** Content runs of one video playlist (HLS) or the MPD periods (DASH), for ad insertion. */
+  readonly runs = new Map<string, ContentRun>();
+  private runsPlaylist: string | null = null;
 
   onChange(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -150,6 +154,8 @@ export class ScteMonitor {
     this.events.clear();
     this.playlists.clear();
     this.labels.clear();
+    this.runs.clear();
+    this.runsPlaylist = null;
     this.seq = 0;
     this.emit();
   }
@@ -187,6 +193,49 @@ export class ScteMonitor {
     }
     if (!info.isLive) p.duration = info.totalDuration;
     this.playlists.set(uri, p);
+  }
+
+  /** Records the content runs of one video playlist (refreshes extend them). */
+  noteHlsRuns(uri: string, info: HlsPlaylistInfo) {
+    const kind = this.labels.get(uri)?.kind ?? 'unknown';
+    if (info.isMaster || kind === 'audio' || kind === 'subtitles') return;
+    this.runsPlaylist ??= uri;
+    if (uri !== this.runsPlaylist) return;
+    let changed = false;
+    for (const run of hlsRuns(info)) {
+      const span = (r: ContentRun) => (r.date ? [r.date.getTime() / 1000, r.date.getTime() / 1000 + r.duration] : [r.offset ?? 0, (r.offset ?? 0) + r.duration]);
+      const [a, b] = span(run);
+      const same = [...this.runs.values()].find((r) => {
+        if (r.origin !== run.origin || r.source !== run.source) return false;
+        const [c, d] = span(r);
+        // Overlap (the same run in a refreshed window); back-to-back runs stay separate ads.
+        return a < d - 0.05 && b > c + 0.05 && Boolean(r.date) === Boolean(run.date);
+      });
+      if (same) {
+        const [c, d] = span(same);
+        const end = Math.max(b, d);
+        if (end - c > same.duration + 0.01) {
+          same.duration = end - c;
+          changed = true;
+        }
+        continue;
+      }
+      run.start = this.resolveRun(run);
+      this.runs.set(run.key, run);
+      changed = true;
+    }
+    if (changed) this.emit();
+  }
+
+  /** Replaces the DASH periods (every MPD refresh lists the current ones). */
+  noteDashRuns(runs: ContentRun[]) {
+    for (const r of runs) this.runs.set(r.key, r);
+    if (runs.length) this.emit();
+  }
+
+  private resolveRun(run: ContentRun): number | null {
+    if (run.start !== null || !this.hlsResolver) return run.start;
+    return this.hlsResolver({ kind: 'CUE-OUT', tag: '', attributes: {}, date: run.date, playlistOffset: run.offset ?? 0, mediaSequence: 0, segmentUri: run.firstUri });
   }
 
   /** Marks where the marker sits within its video segment, once its time is known. */
@@ -432,6 +481,12 @@ export class ScteMonitor {
       if (!e.alignment && e.startTime !== null) {
         this.align(e);
         if (e.alignment) changed = true;
+      }
+    }
+    for (const r of this.runs.values()) {
+      if (r.start === null) {
+        r.start = this.resolveRun(r);
+        if (r.start !== null) changed = true;
       }
     }
     if (changed) this.emit();

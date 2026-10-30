@@ -94,9 +94,11 @@ export class TimelineView {
 
     const live = this.ctrl.player.isLive();
     const { spans, points } = buildTimeline(this.ctrl.scte.list(), live ? this.ctrl.availabilityEnd() : t1);
+    const pods = this.ctrl.adPods();
     const used = new Set<LaneId>(['markers', 'breaks', ...spans.map((s) => s.lane), ...points.map((p) => p.lane)]);
     const lanes: { id: string; label: string }[] = [
       ...SCTE_LANES.filter((l) => used.has(l.id)),
+      ...(pods.length ? [{ id: 'pods', label: 'Inserted ads' }] : []),
       { id: 'issues', label: 'Health issues' },
       { id: 'quality', label: 'Quality' },
       { id: 'playback', label: 'Stalls & errors' },
@@ -148,6 +150,17 @@ export class TimelineView {
       const d = svg('path', { d: `M${cx} ${y + 5} L${cx + 5} ${y + 12} L${cx} ${y + 19} L${cx - 5} ${y + 12} Z`, class: `point ${p.kind}` }, `${formatTime(p.time)} · ${p.label}`);
       d.addEventListener('click', pick({ time: p.time, text: `${formatTime(p.time)} · ${p.label}`, key: p.keys[0] }));
       root.append(d);
+    }
+    for (const r of pods) {
+      const { start, duration } = r.pod;
+      if (start + duration < t0 || start > t1) continue;
+      const y = rowY.get('pods')!;
+      const a = x(Math.max(start, t0));
+      const b = x(Math.min(start + duration, t1));
+      const text = `${formatTime(start)} · ${r.pod.kind === 'interstitial' ? 'Interstitial' : 'Inserted'} pod, ${r.pod.ads.length} ad${r.pod.ads.length > 1 ? 's' : ''}, ${duration.toFixed(1)} s`;
+      const rect = svg('rect', { x: a, y: y + 4, width: Math.max(2, b - a), height: ROW_H - 8, rx: 3, class: 'span pod' }, text);
+      rect.addEventListener('click', pick({ time: start, text, key: r.signal?.events[0].key ?? r.pod.key }));
+      root.append(rect);
     }
     for (const i of this.health.get()) {
       if (i.time === null || !inView(i.time)) continue;

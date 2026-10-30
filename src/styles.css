@@ -1840,6 +1840,10 @@ ul.issues li {
   fill: var(--ad);
 }
 
+.timeline-svg .span.pod {
+  fill: #ef4444;
+}
+
 .timeline-svg .span.programme {
   fill: var(--accent);
 }
