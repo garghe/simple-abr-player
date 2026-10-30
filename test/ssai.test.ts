@@ -47,7 +47,7 @@ describe('ad insertion', () => {
     const pods = findPods([...m.runs.values()], m.list());
     expect(pods).toHaveLength(1);
     expect(pods[0]).toMatchObject({ start: 4, duration: 6, kind: 'inserted' });
-    expect(pods[0].ads.map((a) => a.origin)).toEqual(['ads.example.net/creatives', 'ads.example.net/creatives']);
+    expect(pods[0].ads.map((a) => a.origin)).toEqual(['ads.example.net/creatives/a', 'ads.example.net/creatives/b']);
     const [r] = reportPods(pods, m.list());
     expect(r.breakLength).toBe(8);
     expect(r.fill).toBe(-2);
@@ -77,9 +77,9 @@ describe('ad insertion', () => {
     </MPD>`;
     const runs = dashRuns(mpd, 'https://cdn.example.com/vod/movie/manifest.mpd');
     expect(runs.map((r) => [r.periodId, r.start, r.duration, r.origin])).toEqual([
-      ['main-1', 0, 20, 'cdn.example.com/vod'],
-      ['ad-1', 20, 15, 'ads.example.net/pods'],
-      ['main-2', 35, 25, 'cdn.example.com/vod'],
+      ['main-1', 0, 20, 'cdn.example.com/vod/movie/v'],
+      ['ad-1', 20, 15, 'ads.example.net/pods/123'],
+      ['main-2', 35, 25, 'cdn.example.com/vod/movie/v'],
     ]);
     expect(findPods(runs, []).map((p) => [p.start, p.duration])).toEqual([[20, 15]]);
     expect(isoDuration('PT1H2M3.5S')).toBe(3723.5);

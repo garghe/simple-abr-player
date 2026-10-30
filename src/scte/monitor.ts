@@ -383,6 +383,8 @@ export class ScteMonitor {
               checks.push({ elapsed: cue.elapsed, actual, tag: cue.tag });
             }
           }
+          // Inside a break whose CUE-OUT we already have: nothing to synthesise.
+          if (out?.hls && (cue.date && out.hls.date ? (cue.date.getTime() - out.hls.date.getTime()) / 1000 : cue.playlistOffset - out.hls.playlistOffset) <= (out.duration ?? Infinity) + 1) continue;
           const hasOut = [...this.events.values()].some(
             (e) =>
               e.direction === 'out' &&

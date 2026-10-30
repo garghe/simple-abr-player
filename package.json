@@ -14,7 +14,9 @@
     "sample": "node scripts/make-sample.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "deploy": "npm run build && wrangler deploy",
-    "test:e2e:drm": "node scripts/e2e-drm.mjs"
+    "test:e2e:drm": "node scripts/e2e-drm.mjs",
+    "sample:issues": "node scripts/make-issues-sample.mjs",
+    "test:e2e:scte": "node scripts/e2e-scte.mjs"
   },
   "dependencies": {
     "shaka-player": "^5.2.13"

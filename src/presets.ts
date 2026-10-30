@@ -27,6 +27,12 @@ export function presets(): Preset[] {
       name: 'SCTE-35 demo — HLS (DATERANGE + CUE-OUT/IN + emsg)',
       url: local('samples/scte-demo/master.m3u8'),
     },
+    {
+      group: 'Bundled sample (offline)',
+      name: 'SCTE-35 health demo — HLS with an inserted ad pod and signalling errors',
+      url: local('samples/scte-issues/master.m3u8'),
+      notes: 'Underfilled ad pod, wrong CUE-OUT-CONT, late end signal, a marker missing from 240p, an OUT with no IN and a broken CRC',
+    },
     { group: 'VOD', name: 'Angel One — DASH, multi-audio + subtitles (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd' },
     { group: 'VOD', name: 'Angel One — HLS (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8' },
     { group: 'VOD', name: 'Sintel — DASH MP4 (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/sintel-mp4-only/dash.mpd' },

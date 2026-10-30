@@ -21,6 +21,7 @@
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Screenshots](#screenshots)
 - [SCTE-35 support](#scte-35-support)
+  - [SCTE-35 tools](#scte-35-tools)
 - [Audio levels and loudness](#audio-levels-and-loudness)
 - [DRM: Widevine and FairPlay](#drm-widevine-and-fairplay)
 - [Architecture](#architecture)
@@ -44,7 +45,8 @@
 | **Stats: Tracks** | Every video rendition, audio track (language, roles, codec, channels, sample rate), subtitle/caption track, thumbnail track and quality option, with the active ones highlighted. |
 | **Audio meters** | Per-channel level meters on the video (stereo or 5.1), with short-term loudness. On by default; toggle with the **Meters** button or `a`. |
 | **Stats: Audio** | Large per-channel peak meters with peak hold, loudness to **EBU R128** (−23 LUFS) or **ATSC A/85** (−24 LKFS) — momentary, short-term, integrated, true peak, loudness range — and L/R phase correlation. Also compares the channels the manifest declares with the channels actually decoded. |
-| **Stats: SCTE-35** | Every ad marker the app finds, with time, source, OUT/IN direction, a decoded summary and duration. Click a marker to see its full decoded contents and CRC check. Also shows whether you're **in an ad break right now** (with countdown), and includes a **manual decoder** for pasted base64 or hex messages. |
+| **Stats: SCTE-35** | Every ad marker the app finds, with time, source, OUT/IN direction, a decoded summary and duration. Click a marker to see its full decoded contents, CRC check and **splice timing** (lead time, segment alignment, `splice_time`). Also shows whether you're **in an ad break right now** (with countdown), and includes a **manual decoder** for pasted base64 or hex messages. |
+| **SCTE-35 tools** | **Health** checks that list what's wrong with the signalling (unpaired OUT/IN and segmentation signals, wrong durations, CRC errors, markers missing from some playlists, short lead times, splices off segment boundaries). A **Timeline** with one lane per signal type plus quality switches and stalls, the **Structure** (programme → chapter → break → ad), **Ad insertion** (server-side inserted ads and HLS Interstitials matched with their breaks, with underfill/overfill), a **Monitor** mode (sound or browser notification on new markers, counts per hour, CSV export), a message **Builder**, and break navigation (`n` / `p` / `b` / `s`). See [SCTE-35 tools](#scte-35-tools). |
 | **Stats: Network** | Every manifest, playlist and segment request: status, size, time, throughput, errors, and whether it went through the proxy. |
 | **Stats: Manifest** | The raw MPD and every HLS playlist exactly as fetched (refreshes for live streams), with SCTE and ad-related lines highlighted. |
 | **DRM** | **Widevine** (Chrome, Edge, Firefox, Android) and **FairPlay** (Safari). Works with any license server: license URL, request headers and, if needed, generic request/response formats, with no provider-specific settings. Saved profiles. License requests can go through the CORS proxy. |
@@ -70,7 +72,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**, paste a DASH or HLS URL and press **Load**. You can also pick a stream from the **Test streams…** menu. The two **Bundled sample** entries work fully offline and contain SCTE-35 markers.
+Open **http://localhost:5173**, paste a DASH or HLS URL and press **Load**. You can also pick a stream from the **Test streams…** menu. The three **Bundled sample** entries work fully offline and contain SCTE-35 markers; the **SCTE-35 health demo** has deliberate signalling errors and an inserted ad pod.
 
 You can also link straight to a stream:
 
@@ -88,6 +90,8 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm test` | Runs the unit tests (Vitest). |
 | `npm run typecheck` | Checks TypeScript types only. |
 | `npm run sample` | Regenerates the bundled SCTE-35 sample (needs `ffmpeg`). |
+| `npm run sample:issues` | Regenerates the SCTE-35 health demo from the bundled sample (no `ffmpeg` needed). |
+| `npm run test:e2e:scte` | Checks the SCTE-35 tools end to end in headless Chromium on the bundled samples. Add `-- --shots` to refresh the SCTE screenshots. |
 | `npm run test:e2e:drm` | Runs the DRM pipeline end to end in headless Chromium with ClearKey and a local test license server. Add `-- --shots` to refresh the DRM screenshots. |
 | `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
 | `npm run screenshots` | Regenerates the README screenshots (needs Playwright's Chromium). |
@@ -217,6 +221,21 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 **SCTE-35 tab during an ad break (DASH sample)**: ad-break banner on the video, markers and break regions on the seek bar, the marker list, and the decoded detail of an in-band `time_signal`.
 ![SCTE-35](docs/screenshots/scte-dash.png)
 
+**SCTE-35 Health (health demo sample)**: the problems planted in the demo stream, grouped by check, each linking to its marker.
+![SCTE-35 health](docs/screenshots/scte-health.png)
+
+**SCTE-35 Timeline**: OUT/IN breaks, placement opportunity and ad segmentation, the inserted ad pod, health issues and quality on one time axis.
+![SCTE-35 timeline](docs/screenshots/scte-timeline.png)
+
+**SCTE-35 Structure**: signals nested by time, with decoded UPIDs.
+![SCTE-35 structure](docs/screenshots/scte-structure.png)
+
+**Ad insertion**: an inserted pod matched with its break, 2 s short of the break length.
+![Ad insertion](docs/screenshots/scte-ads.png)
+
+**SCTE-35 Builder**: a placement opportunity start from a preset, as base64, hex, HLS tags and a DASH EventStream.
+![SCTE-35 builder](docs/screenshots/scte-builder.png)
+
 **Audio tab with the 5.1 track**: six channel meters on the video and in the tab, EBU R128 loudness, and decoded-channel information.
 ![Audio](docs/screenshots/audio.png)
 
@@ -268,6 +287,53 @@ The app looks for markers in every common way they are carried. Duplicates are r
 The decoder (`src/scte/scte35.ts`) recognises every splice command (`splice_null`, `splice_insert`, `time_signal`, `splice_schedule`, `bandwidth_reservation`, `private_command`). It fully decodes `splice_insert` and `time_signal` (the commands used for ad signalling) and these descriptors (`avail`, `DTMF`, `segmentation` with all segmentation types and UPID types, `time`). It also checks the message's CRC. It accepts base64 or hex. Encrypted messages are flagged but not decrypted.
 
 An ad break counts as **active** from an OUT marker (splice_insert with out-of-network set, or a segmentation type that starts an ad or placement opportunity) until its advertised duration runs out or an IN marker arrives.
+
+### SCTE-35 tools
+
+The SCTE-35 tab has a break status line, navigation buttons, and these views:
+
+| View | What it does |
+| --- | --- |
+| **Markers** | The marker list. A **Checks** column flags markers with issues; the detail adds **Splice timing** and the checks for that marker. |
+| **Health** | Every issue found so far, grouped by check, with a severity (error, warning, note). Click a time to open the marker. |
+| **Timeline** | Lanes for OUT → IN breaks and each segmentation family (programme, chapter, break, advertisement, placement opportunity, promo/credits), inserted ads, health issues, quality switches, stalls and errors. Zoom: all, 10 min, 2 min, 30 s around the playhead. Click to seek. |
+| **Structure** | Segmentation signals nested by time: programme → chapter → break → placement opportunity → advertisement, with UPIDs decoded (Ad-ID, ADI, EIDR, TI as a number, MPU format identifier, UUID, URI, MID). |
+| **Ad insertion** | Inserted ad pods and HLS Interstitials, each matched with the SCTE OUT that started its break, with the break length and how well the pod fills it. |
+| **Monitor** | For leaving a live channel running: a sound and/or a browser notification for each new marker (optionally OUT/IN only), marker counts per hour, and **Export CSV** (one row per marker with timing and issues). |
+| **Builder** | Compose `splice_insert`, `time_signal` or `splice_null` with segmentation descriptors (type, duration, UPID, segment numbers, delivery restrictions), from scratch or from a preset, and copy it as base64, hex, HLS tags (`EXT-X-DATERANGE`, `CUE-OUT`/`CUE-IN`, `EXT-OATCLS-SCTE35`, `EXT-X-SCTE35`) or a DASH `EventStream`. The output is decoded back to check it. |
+
+**Navigation:** `n` / `p` jump to the next / previous marker, `b` to a few seconds before the next break (3–30 s, chosen next to the buttons), `s` skips the current break. The ad-break banner on the video also has a **Skip** button.
+
+#### Health checks
+
+| Check | Severity |
+| --- | --- |
+| Message can't be decoded, or its **CRC** doesn't match | error |
+| **OUT without an IN** and without a duration (VOD), **IN without an OUT**, or a new break before the previous one ended | warning (a note on a live stream joined mid-break, or a break still open) |
+| **Break length differs from the advertised duration** by more than 1 s (early or late IN) | warning |
+| Signals of the same break (e.g. `DATERANGE` and `CUE-OUT`) **disagree on its duration** | warning |
+| **Segmentation start without an end** (`0x34` without `0x35`, Program Start without End…), **end without a start**, or a start/end pair whose length differs from the segmentation duration | warning (a note when the duration closes it) |
+| End signal with a **different event ID**, or a **splice_event_id reused** for a later break | note |
+| `segment_num` above `segments_expected` | warning |
+| **`CUE-OUT-CONT` elapsed time** doesn't match the time since its `CUE-OUT` | warning |
+| `DATERANGE` `END-DATE` and `DURATION` disagree; `DURATION` differs from `PLANNED-DURATION` | warning; note |
+| **Marker missing from a playlist** that covers its time (checked for every playlist the player has read) | warning for video, note for audio-only |
+| **Late marker** (arrived after its splice time) or **short lead time** (below the threshold you set, 4 s by default) — live streams | error; warning |
+| **Splice not on a segment boundary** (more than one frame off), or `DATERANGE` starting mid-segment | warning |
+| A marker whose **`splice_time` doesn't match** where it sits, compared with the stream's other markers | warning |
+| **Ad pod shorter or longer than its break** (underfill / overfill, more than 1 s) | warning |
+| Inserted content without a marker; a break with no inserted content (in a stream that uses insertion) | note |
+| Cancelled events, encrypted messages | note |
+
+#### Splice timing
+
+- **Lead time** (live streams): how early the marker was seen before its splice point. DASH `EventStream` and HLS `DATERANGE` markers are compared with the live edge when they first appeared; in-band `emsg` markers with the end of the media buffered at that moment (they arrive inside a segment). HLS tags that sit on the splice segment (`CUE-OUT`, `OATCLS`…) arrive with that segment by design, so they get no lead time.
+- **Segment alignment:** where the splice falls inside the video segment that contains it. Segment-based players and server-side insertion can only switch at segment starts, so a mid-segment splice lands early or late.
+- **`splice_time`:** the PTS in the message (with `pts_adjustment`). The PTS clock and the player timeline differ by a constant per stream, so a marker whose offset differs from the others is mis-timed.
+
+#### Ad insertion detection
+
+Inserted ads come from somewhere else than the programme. In **HLS**, PlayProbe splits one video playlist into runs at each `EXT-X-DISCONTINUITY`; a run that starts with a discontinuity and comes from another host or folder than the main content (the origin with the most playing time) is inserted content. Back-to-back runs form one **pod**. In **DASH**, each period's origin (from `BaseURL` and the segment template) is compared the same way. **HLS Interstitials** (`EXT-X-DATERANGE CLASS="com.apple.hls.interstitial"`) are listed from their `X-ASSET-URI` / `X-ASSET-LIST`. Each pod is matched with an SCTE OUT within 2 s, and its length compared with the break.
 
 ---
 
@@ -409,7 +475,12 @@ flowchart LR
 | `server/proxy-plugin.ts` | Adds the CORS proxy to the Vite dev and preview servers. Passes ranges, headers and redirects through, and follows the HTTPS proxy settings. |
 | `src/scte/scte35.ts` | SCTE-35 decoder, CRC check, summaries, and out/in and duration helpers. No dependencies; unit-tested against published sample messages. |
 | `src/scte/hls-cues.ts` | Finds ad-marker tags in HLS playlists and links each one to its segment, timestamp and position. |
-| `src/scte/monitor.ts` | Merges markers from all sources, removes duplicates, fills in timings that arrive later, and works out whether an ad break is active. |
+| `src/scte/monitor.ts` | Merges markers from all sources, removes duplicates, fills in timings that arrive later, and works out whether an ad break is active. Also records which playlists carry each marker, what each playlist covers, the player state when a marker arrives, segment alignment, `CUE-OUT-CONT` elapsed times and the content runs used for ad insertion. |
+| `src/scte/health.ts`, `timing.ts` | The health checks (pure functions of the markers) and splice timing: lead time, segment alignment, PTS with `pts_adjustment` and wrap handling. |
+| `src/scte/timeline.ts`, `structure.ts`, `navigation.ts` | Lanes and spans for the timeline, nesting for the structure view, and where to seek for marker and break navigation. |
+| `src/scte/ssai.ts` | Content runs from HLS playlists and DASH periods, ad pods and interstitials, and their match with breaks. |
+| `src/scte/encode.ts`, `csv.ts` | SCTE-35 encoder (checked against the specification's sample) with HLS tag and DASH EventStream output; CSV export and hourly counts. |
+| `src/ui/scte/*` | The SCTE-35 sub-views (health, timeline, structure, ad insertion, monitor and alerts, builder) and the navigator shared by the keys, buttons and banner. |
 | `src/ui/controls.ts`, `seekbar.ts` | Control bar, track selectors, keyboard shortcuts, and the seek bar with buffered regions and SCTE markers and breaks. |
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
@@ -471,18 +542,22 @@ sequenceDiagram
 ├── src/
 │   ├── main.ts                Connects everything: load, settings, overlay, export, share
 │   ├── player/                PlayerController (Shaka wrapper), proxy URL helpers
-│   ├── scte/                  SCTE-35 decoder, HLS cue parser, marker monitor
+│   ├── scte/                  SCTE-35 decoder/encoder, HLS cue parser, marker monitor, health checks, timing, ad insertion
 │   ├── audio/                 Audio meters: DSP, loudness, fMP4 reader, WebCodecs + Web Audio sources
 │   ├── drm/                   DRM settings, license request/response formats, protection parsing, monitor
 │   ├── ui/                    Controls, seek bar, chart, helpers
+│   │   ├── scte/              SCTE-35 views: health, timeline, structure, ad insertion, monitor, builder
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
 │   ├── presets.ts             Test stream list
 │   ├── settings.ts            Saved settings / history
 │   └── styles.css
 ├── public/logo.svg, favicon.* App logo, favicons and home-screen icon
 ├── public/samples/scte-demo/  Bundled offline DASH + HLS sample with SCTE-35
+├── public/samples/scte-issues/ SCTE-35 health demo (HLS with an inserted pod and signalling errors)
 ├── scripts/
 │   ├── make-sample.mjs        Builds the sample with ffmpeg + adds SCTE-35 markers
+│   ├── make-issues-sample.mjs Builds the SCTE-35 health demo from the sample
+│   ├── e2e-scte.mjs           End-to-end checks of the SCTE-35 tools
 │   ├── screenshots.mjs        Regenerates docs/screenshots with Playwright
 │   └── lib/scte35-encode.mjs  Minimal SCTE-35 encoder (sample + tests)
 ├── test/                      Vitest unit tests
@@ -503,12 +578,15 @@ The unit tests cover:
 - **SCTE-35 decoding** against published sample messages (`time_signal` with a Placement Opportunity Start; `splice_insert` with a break duration and avail descriptor), round trips with the encoder, CRC checks, and invalid input.
 - **HLS tag parsing**: attribute lists, DATERANGE, CUE-OUT/CONT/IN and OATCLS, segment and timestamp linking, VOD vs live.
 - **Marker monitor**: duplicate removal across playlists and refreshes, active-break detection, and joining a live stream mid-break.
+- **SCTE-35 health and tools**: every health check (break pairing and durations, merged signals, segmentation pairs, CRC and cancels, `CUE-OUT-CONT`, missing renditions, lead time, segment alignment, `splice_time` outliers), the encoder (round trips, the specification's `splice_insert` sample byte for byte, PTS wrap), HLS tag and EventStream output, builder form validation, navigation, timeline lanes, structure nesting, CSV escaping and hourly counts, UPID formats, and ad insertion (HLS pods, live refreshes, DASH periods, interstitials, underfill).
 - **Proxy URL conversion**: round trips, relative URLs, how the server reads the target URL, and the host allowlist.
 - **Cloudflare Worker**: static files passed through, proxy off by default, health check and capabilities, CORS and Range/custom header forwarding, redirect rewriting, allowlist blocking, and the segment guardrail (blocked by extension without contacting the origin, blocked by Content-Type, playlists still allowed, `PROXY_SEGMENTS=true` override).
 - **Loudness**: BS.1770-4 K-weighting coefficients; EBU Tech 3341 tests 1, 2, 3 and 5 (integrated, momentary, short-term, relative and absolute gates); 5.1 surround weighting and LFE exclusion; EBU Tech 3342 loudness range; true peak against an inter-sample-peak signal; correlation.
 - **fMP4 audio parsing** on the bundled sample: Opus stereo and 5.1 configuration (OpusHead with channel mapping), video init ignored, sample tables.
 - **DRM**: request formats (raw, base64, JSON template with escaping, form), response formats (auto-detect of binary, base64, `<ckc>`, JSON fields; ClearKey passed through), FairPlay content ID from `skd://` (UTF-8 and UTF-16), Widevine and ClearKey PSSH decoding from real streams, MPD and HLS key tags, init-segment boxes, error messages. The Worker tests also cover license POST forwarding and the size limit. The end-to-end DRM run is `npm run test:e2e:drm` (see [Testing DRM](#testing-drm)).
 - **Request routing**: manifests proxied, segments sent directly, relative segment URLs taken back out of the proxy, own-site files never proxied.
+
+`npm run test:e2e:scte` plays the two bundled samples in headless Chromium and checks that every problem planted in the health demo is reported, that the clean sample passes, the ad pod and its fill, the timeline, structure, navigation keys, CSV download, the marker missing from the 240p playlist (after switching to it) and the builder.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
 
@@ -527,6 +605,14 @@ For end-to-end checks, `npm run screenshots` drives the real app in Chromium aga
   - **20 s → 26 s:** `time_signal` with a segmentation descriptor (Provider Placement Opportunity Start/End, Ad-ID UPID), as **in-band `emsg`** boxes in the video segments (both DASH and HLS).
 
 VP9/Opus is used so the sample also plays in open-source Chromium, which is used for the automated screenshots.
+
+### SCTE-35 health demo
+
+`public/samples/scte-issues/` (pick **SCTE-35 health demo** from **Test streams…**) is an HLS stream built from the same segments by `npm run sample:issues`, with problems planted on purpose:
+
+- **6 s:** an 8 s break (`DATERANGE` + `CUE-OUT`) filled by a **6 s inserted pod** (segments from another folder, between discontinuities): underfill. One `CUE-OUT-CONT` states 7 s elapsed when 4 s have.
+- **16 s:** a Provider Placement Opportunity (2 s) with an advertisement inside it, whose end signal comes after 4 s. It is **missing from the 240p playlist** (switch the quality to 240p to see that check).
+- **32 s:** a `CUE-OUT` with no duration and no IN, carrying an `OATCLS` message with a **broken CRC**.
 
 ---
 
@@ -580,7 +666,6 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 - Thumbnail previews on the seek bar.
 - Low-latency stats (part and chunk timing, playback-rate catch-up).
 - CMCD / CMSD reporting and inspection.
-- A timeline view of SCTE breaks against playback and quality switches.
 - Direct audio metering for MPEG-2 TS and packed-audio HLS (demux ADTS/AC-3), so those streams don't need the Web Audio fallback.
 
 ---

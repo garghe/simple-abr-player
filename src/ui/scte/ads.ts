@@ -55,7 +55,7 @@ export class AdsView {
       h(
         'p',
         { class: 'muted small' },
-        'Server-side inserted ads come from a different origin (host and first path folder) than the programme, separated by discontinuities in HLS or as their own periods in DASH. Each pod is matched with an SCTE OUT within 2 s; the fill compares its length with the break. Underfill and pods without a marker also appear under Health.',
+        'Server-side inserted ads come from a different origin (host and folder) than the programme, separated by discontinuities in HLS or as their own periods in DASH. Each pod is matched with an SCTE OUT within 2 s; the fill compares its length with the break. Underfill and pods without a marker also appear under Health.',
       ),
     );
   }

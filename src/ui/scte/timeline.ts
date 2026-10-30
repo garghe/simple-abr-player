@@ -162,7 +162,8 @@ export class TimelineView {
       rect.addEventListener('click', pick({ time: start, text, key: r.signal?.events[0].key ?? r.pod.key }));
       root.append(rect);
     }
-    for (const i of this.health.get()) {
+    // Notes first, errors last, so the most severe dot ends up on top.
+    for (const i of [...this.health.get()].reverse()) {
       if (i.time === null || !inView(i.time)) continue;
       const y = rowY.get('issues')!;
       const c = svg('circle', { cx: x(i.time), cy: y + 12, r: 5, class: `issue ${i.severity}` }, `${formatTime(i.time)} · ${i.title}: ${i.detail}`);
@@ -200,7 +201,8 @@ export class TimelineView {
       ...(p
         ? [
             h('span', null, p.text),
-            p.key ? h('button', { type: 'button', class: 'linklike', onclick: () => this.select(p.key!) }, ' Open marker detail') : '',
+            ' ',
+            p.key ? h('button', { type: 'button', class: 'linklike', onclick: () => this.select(p.key!) }, 'Open marker detail') : '',
           ]
         : [h('span', { class: 'muted' }, 'Spans run from a start signal to its end signal (or its advertised duration); a faded end means no end yet.')]),
     );

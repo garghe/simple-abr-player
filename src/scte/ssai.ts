@@ -14,7 +14,9 @@ import type { ScteEvent } from './monitor';
 /** A stretch of content from one origin (between discontinuities / one DASH period). */
 export interface ContentRun {
   key: string;
-  /** Host + first path directory of the segments, e.g. "ads.cdn.com/creatives". */
+  /** HLS: an EXT-X-DISCONTINUITY starts the run (inserted content always has one). */
+  discontinuity?: boolean;
+  /** Host + directory of the segments, e.g. "ads.cdn.com/creatives/123". */
   origin: string;
   /** Presentation time, once known. */
   start: number | null;
@@ -52,13 +54,13 @@ export interface PodReport {
   fill?: number;
 }
 
+/** Host and directory of a segment URI: where the content comes from. */
 export function originOf(uri: string): string {
   try {
     const u = new URL(uri);
-    const dir = u.pathname.split('/').filter(Boolean)[0] ?? '';
-    return `${u.host}/${u.pathname.split('/').filter(Boolean).length > 1 ? dir : ''}`;
+    return `${u.host}${u.pathname.replace(/\/[^/]*$/, '')}`;
   } catch {
-    return uri.split('/').slice(0, -1)[0] ?? uri;
+    return uri.replace(/\/[^/]*$/, '');
   }
 }
 
@@ -79,6 +81,7 @@ export function hlsRuns(info: HlsPlaylistInfo): ContentRun[] {
         offset: s.offset,
         firstUri: s.uri,
         source: 'HLS discontinuity',
+        discontinuity: s.discontinuity,
       };
       runs.push(cur);
     }
@@ -142,7 +145,8 @@ export function findPods(runs: ContentRun[], events: ScteEvent[]): AdPod[] {
   const pods: AdPod[] = [];
   const timed = runs.filter((r) => r.start !== null).sort((a, b) => a.start! - b.start!);
   for (const r of timed) {
-    if (totals.size < 2 || r.origin === main) continue;
+    // Another origin without a discontinuity is a path change (e.g. dated folders), not an insertion.
+    if (totals.size < 2 || r.origin === main || (r.source === 'HLS discontinuity' && !r.discontinuity)) continue;
     const last = pods[pods.length - 1];
     if (last && last.kind === 'inserted' && Math.abs(last.start + last.duration - r.start!) < 0.5) {
       last.ads.push({ origin: r.origin, duration: r.duration, uri: r.firstUri });
