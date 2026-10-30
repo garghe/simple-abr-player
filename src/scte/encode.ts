@@ -177,3 +177,40 @@ export const toHexString = (b: Uint8Array): string => `0x${toHex(b).toUpperCase(
 
 /** Seconds to 90 kHz ticks. */
 export const ticks = (seconds: number): number => Math.round(seconds * 90000);
+
+export interface TagInfo {
+  /** OUT / IN / other, picks SCTE35-OUT / -IN / -CMD and CUE-OUT / CUE-IN. */
+  direction: 'out' | 'in' | 'other';
+  /** Seconds. */
+  duration?: number;
+  id: string;
+  /** DATERANGE START-DATE. */
+  startDate: Date;
+}
+
+/** The message as the common HLS tags. */
+export function hlsTags(bytes: Uint8Array, info: TagInfo): string[] {
+  const hex = toHexString(bytes);
+  const b64 = toBase64(bytes);
+  const attr = info.direction === 'out' ? 'SCTE35-OUT' : info.direction === 'in' ? 'SCTE35-IN' : 'SCTE35-CMD';
+  const dur = info.duration !== undefined ? `,PLANNED-DURATION=${+info.duration.toFixed(3)}` : '';
+  const tags = [`#EXT-X-DATERANGE:ID="${info.id}",START-DATE="${info.startDate.toISOString()}"${dur},${attr}=${hex}`];
+  if (info.direction === 'out') tags.push(`#EXT-X-CUE-OUT:${info.duration !== undefined ? `DURATION=${+info.duration.toFixed(3)}` : ''}`.replace(/:$/, ''));
+  if (info.direction === 'in') tags.push('#EXT-X-CUE-IN');
+  tags.push(`#EXT-OATCLS-SCTE35:${b64}`, `#EXT-X-SCTE35:CUE="${b64}"${info.id ? `,ID="${info.id}"` : ''}`);
+  return tags;
+}
+
+/** The message as a DASH EventStream (SCTE 214 xml+bin), times in 90 kHz. */
+export function dashEventStream(bytes: Uint8Array, info: { presentationTime: number; duration?: number; id: string }): string {
+  const dur = info.duration !== undefined ? ` duration="${ticks(info.duration)}"` : '';
+  return [
+    '<EventStream schemeIdUri="urn:scte:scte35:2014:xml+bin" timescale="90000">',
+    `  <Event presentationTime="${ticks(info.presentationTime)}"${dur} id="${info.id}">`,
+    '    <Signal xmlns="http://www.scte.org/schemas/35/2016">',
+    `      <Binary>${toBase64(bytes)}</Binary>`,
+    '    </Signal>',
+    '  </Event>',
+    '</EventStream>',
+  ].join('\n');
+}

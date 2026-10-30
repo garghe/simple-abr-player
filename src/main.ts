@@ -6,6 +6,7 @@ import { drmHint } from './drm/errors';
 import { isDrmConfigured, normaliseDrm } from './drm/settings';
 import { DrmPanel } from './ui/drm/panel';
 import { ScteNavigator } from './ui/scte/navigator';
+import { BuilderView } from './ui/scte/builder';
 import { presets, type Preset } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
 import { snapshot } from './ui/stats/overview';
@@ -181,6 +182,8 @@ ctrl.on('tracks', resetAudioOnTrackChange);
 const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, () => toggleDrmPanel(true));
 const scteNav = new ScteNavigator(ctrl, showToast);
 panel.scteTab.setNavigation(scteNav.toolbar());
+const scteBuilder = new BuilderView(showToast);
+panel.scteTab.addView({ id: 'builder', label: 'Builder', el: scteBuilder.el, render: () => scteBuilder.render() });
 // Marker and ad-break shortcuts (the player's own keys live in Controls).
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement;

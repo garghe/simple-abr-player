@@ -238,3 +238,30 @@ describe('timeline lanes', () => {
     expect(byLane('ad')).toEqual([[40, 44, false]]);
   });
 });
+
+describe('builder outputs', () => {
+  it('formats HLS tags and a DASH EventStream that decode back', async () => {
+    const { hlsTags, dashEventStream } = await import('../src/scte/encode');
+    const bytes = encodeScte35({ command: { type: 'splice_insert', eventId: 9, outOfNetwork: true, pts: ticks(10), duration: ticks(30) } });
+    const tags = hlsTags(bytes, { direction: 'out', duration: 30, id: 'ad-9', startDate: new Date('2026-01-01T00:00:00Z') });
+    expect(tags[0]).toBe(`#EXT-X-DATERANGE:ID="ad-9",START-DATE="2026-01-01T00:00:00.000Z",PLANNED-DURATION=30,SCTE35-OUT=${toHexString(bytes)}`);
+    expect(tags[1]).toBe('#EXT-X-CUE-OUT:DURATION=30');
+    const cues = parseHlsCues(playlist(4, { 1: tags }), 'https://x/v.m3u8').cues;
+    expect(cues.map((c) => c.kind)).toEqual(['DATERANGE', 'CUE-OUT', 'OATCLS-SCTE35', 'SCTE35']);
+    for (const c of cues.filter((x) => x.scte35)) expect(parseScte35(c.scte35!).crcValid).toBe(true);
+    const xml = dashEventStream(bytes, { presentationTime: 10, duration: 30, id: '9' });
+    expect(xml).toContain('presentationTime="900000" duration="2700000" id="9"');
+    expect(parseScte35(xml.match(/<Binary>(.*)<\/Binary>/)![1]).crcValid).toBe(true);
+  });
+
+  it('turns the builder form into a spec, with clear errors', async () => {
+    const { formToSpec } = await import('../src/ui/scte/builder');
+    const base = { command: 'time_signal', eventId: '1', direction: 'out', cancel: false, immediate: false, spliceTime: '5', duration: '', autoReturn: true, uniqueProgramId: '0', availNum: '0', availsExpected: '0', ptsAdjustment: '0', tagId: 'x', presentationTime: '0', descriptors: [] } as const;
+    const d = { eventId: '3', typeId: '52', duration: '30', upidType: '9', upid: 'SIGNAL:x', segmentNum: '1', segmentsExpected: '1', subSegmentNum: '0', subSegmentsExpected: '0', cancel: false, restricted: false, webDeliveryAllowed: true, noRegionalBlackout: true, archiveAllowed: true };
+    const spec = formToSpec({ ...base, descriptors: [d] });
+    expect(spec.command).toEqual({ type: 'time_signal', pts: ticks(5) });
+    expect(spec.descriptors![0]).toMatchObject({ eventId: 3, typeId: 0x34, duration: ticks(30), upid: 'SIGNAL:x' });
+    expect(() => formToSpec({ ...base, spliceTime: 'abc' })).toThrow(/Splice time/);
+    expect(() => encodeScte35(formToSpec({ ...base, descriptors: [{ ...d, upid: '0xabc' }] }))).toThrow(/even number/);
+  });
+});

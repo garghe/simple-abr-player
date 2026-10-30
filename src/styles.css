@@ -155,6 +155,8 @@ select {
 button,
 select,
 input[type='url'],
+input[type='text'],
+input[type='number'],
 textarea {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -1911,5 +1913,84 @@ ul.issues li {
 
 .scte-nav select {
   width: auto;
+  flex: 0 0 auto;
   min-width: 5em;
+}
+
+.bfield input,
+.bfield select,
+.lead-input {
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+/* ---- SCTE builder ---- */
+.bgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.bgrid.tags {
+  margin-top: 12px;
+}
+
+.bfield {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bfield input,
+.bfield select {
+  width: 100%;
+  color: var(--text);
+}
+
+.bfield .pair {
+  display: flex;
+  gap: 6px;
+}
+
+.bchecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+
+.bdesc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 8px 12px;
+}
+
+.bdesc legend {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.builder-out {
+  margin-top: 14px;
+}
+
+.bout-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.bout pre {
+  white-space: pre-wrap;
+  word-break: break-all;
 }
