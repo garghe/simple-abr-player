@@ -31,7 +31,7 @@ interface DescriptorForm {
   archiveAllowed: boolean;
 }
 
-interface BuilderForm {
+export interface BuilderForm {
   command: 'splice_insert' | 'time_signal' | 'splice_null';
   eventId: string;
   direction: 'out' | 'in';

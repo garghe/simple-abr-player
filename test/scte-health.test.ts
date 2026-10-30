@@ -256,7 +256,7 @@ describe('builder outputs', () => {
 
   it('turns the builder form into a spec, with clear errors', async () => {
     const { formToSpec } = await import('../src/ui/scte/builder');
-    const base = { command: 'time_signal', eventId: '1', direction: 'out', cancel: false, immediate: false, spliceTime: '5', duration: '', autoReturn: true, uniqueProgramId: '0', availNum: '0', availsExpected: '0', ptsAdjustment: '0', tagId: 'x', presentationTime: '0', descriptors: [] } as const;
+    const base: import('../src/ui/scte/builder').BuilderForm = { command: 'time_signal', eventId: '1', direction: 'out', cancel: false, immediate: false, spliceTime: '5', duration: '', autoReturn: true, uniqueProgramId: '0', availNum: '0', availsExpected: '0', ptsAdjustment: '0', tagId: 'x', presentationTime: '0', descriptors: [] };
     const d = { eventId: '3', typeId: '52', duration: '30', upidType: '9', upid: 'SIGNAL:x', segmentNum: '1', segmentsExpected: '1', subSegmentNum: '0', subSegmentsExpected: '0', cancel: false, restricted: false, webDeliveryAllowed: true, noRegionalBlackout: true, archiveAllowed: true };
     const spec = formToSpec({ ...base, descriptors: [d] });
     expect(spec.command).toEqual({ type: 'time_signal', pts: ticks(5) });
