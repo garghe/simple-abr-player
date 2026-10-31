@@ -22,6 +22,7 @@ First release.
 - System / Light / Dark theme, and a draggable splitter between the player and the stats panel.
 - Bundled offline DASH + HLS sample with SCTE-35 markers, subtitles and a 5.1 track.
 - PlayProbe name, logo and icons; MIT license.
+- Version and release date next to the logo (linking to this changelog), and in Export JSON.
 
 ### Fixed
 
