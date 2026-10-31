@@ -1,7 +1,7 @@
 {
   "name": "playprobe",
-  "version": "1.0.0",
-  "releaseDate": "2026-10-31",
+  "version": "1.1.0",
+  "releaseDate": "",
   "private": true,
   "description": "PlayProbe: play and inspect MPEG-DASH and HLS streams, with DRM (Widevine, FairPlay), SCTE-35, audio loudness and stats for nerds",
   "license": "MIT",

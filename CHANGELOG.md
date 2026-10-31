@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+Planned as 1.1.0.
+
+### Added
+
+- **PlayReady DRM**: license URL (or the one in the stream's PlayReady header), SL3000 / SL2000 security level, and the generic request/response formats; included in saved profiles. In Auto mode, Edge prefers PlayReady when it is set up.
+- PlayReady headers decoded from PSSH, `mspr:pro` and HLS key tags (key IDs, version, algorithm, license URL), with a **Use this** button in the DRM tab for the stream's license URL.
+- Microsoft PlayReady test streams (DASH, and HLS with CBCS) in the test stream list.
+- A clear message when the DRM chosen in the settings doesn't exist in the browser.
+
+### Fixed
+
+- License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.
+
 ## [1.0.0] - 2026-10-31
 
 First release.
