@@ -8,6 +8,7 @@ import { DrmPanel } from './ui/drm/panel';
 import { ScteNavigator } from './ui/scte/navigator';
 import { BuilderView } from './ui/scte/builder';
 import { MonitorView, ScteAlerts } from './ui/scte/monitor';
+import { APP_VERSION, RELEASE_DATE, renderVersion } from './version';
 import { presets, type Preset } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
 import { snapshot } from './ui/stats/overview';
@@ -23,6 +24,7 @@ const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
 const urlInput = $('#url') as HTMLInputElement;
 const presetSel = $('#presets') as HTMLSelectElement;
+renderVersion($('#app-version') as HTMLAnchorElement);
 const historyList = $('#url-history');
 const settingsBtn = $('#settings-btn');
 const settingsPanel = $('#settings');
@@ -360,6 +362,7 @@ $('#export-btn').addEventListener('click', () => {
   const loaded = Boolean(ctrl.loadedUrl);
   const data = {
     exportedAt: new Date().toISOString(),
+    app: { name: 'PlayProbe', version: APP_VERSION, releaseDate: RELEASE_DATE || null },
     userAgent: navigator.userAgent,
     snapshot: snapshot(ctrl),
     shakaStats: p.getStats(),

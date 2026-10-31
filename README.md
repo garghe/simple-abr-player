@@ -31,6 +31,7 @@
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
+- [Versions and releases](#versions-and-releases)
 - [License](#license)
 
 ---
@@ -667,6 +668,18 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 - Low-latency stats (part and chunk timing, playback-rate catch-up).
 - CMCD / CMSD reporting and inspection.
 - Direct audio metering for MPEG-2 TS and packed-audio HLS (demux ADTS/AC-3), so those streams don't need the Web Audio fallback.
+
+---
+
+## Versions and releases
+
+PlayProbe uses [Semantic Versioning](https://semver.org): a minor version (1.1, 1.2) adds features, a patch version (1.2.1) fixes bugs. Every change is listed in [CHANGELOG.md](CHANGELOG.md), and the header shows the version and its release date (or *pre-release* for work not released yet), linking to the changelog.
+
+To release a version:
+
+1. In `package.json`, set `version` (e.g. `1.1.0`) and `releaseDate` (`YYYY-MM-DD`). Leave `releaseDate` empty on a feature branch: the header then shows *pre-release*.
+2. In `CHANGELOG.md`, move the *Unreleased* notes under a new `## [1.1.0] - YYYY-MM-DD` heading and update the compare links at the bottom.
+3. Merge to `main`, then on GitHub create the release: **Releases → Draft a new release**, tag `v1.1.0` on `main`, and paste that version's changelog section as the notes.
 
 ---
 
