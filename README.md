@@ -30,6 +30,7 @@
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
+- [Changelog](CHANGELOG.md)
 - [License](#license)
 
 ---
