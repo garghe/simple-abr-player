@@ -19,7 +19,10 @@ const TARGETS: [selector: string, context?: string][] = [
   ['.drm-field > span'],
   ['td > label'],
 ];
-const SELECTOR = TARGETS.map(([s]) => s).join(',');
+export const SELECTOR_LIST = TARGETS.map(([s]) => s).join(',');
+const SELECTOR = SELECTOR_LIST;
+/** Labels shown with a dotted underline when they have an explanation. */
+const UNDERLINED = 'table.kv th, .kv-grid small, .loud-tile small, .drm-facts .muted, .fact';
 
 /** The label of an element: its own text, without counts, badges or hints in child elements. */
 export function labelOf(el: Element): string {
@@ -112,7 +115,10 @@ export function installTooltips(root: HTMLElement = document.body): void {
     if (hit[0] === target || adopt(hit)) return;
     hide();
     timer = window.setTimeout(() => {
-      if (hit[0].isConnected) show(hit[0], hit[1]);
+      if (hit[0].isConnected) return show(hit[0], hit[1]);
+      // Redrawn while waiting: use what is under the pointer now.
+      const again = pointer ? find(document.elementFromPoint(pointer.x, pointer.y)) : null;
+      if (again) show(again[0], again[1]);
     }, delay);
   };
 
@@ -138,7 +144,21 @@ export function installTooltips(root: HTMLElement = document.body): void {
   window.addEventListener('scroll', hide, true);
   window.addEventListener('resize', hide);
   // Tabs re-render often; drop the tooltip when its element goes away.
+  // Labels that have an explanation get a dotted underline (data-has-tip), so
+  // the hint never promises a tooltip that isn't there. Checked once per frame at most.
+  let marking = 0;
+  const mark = () => {
+    marking = 0;
+    for (const el of root.querySelectorAll(UNDERLINED)) {
+      if (el.hasAttribute('data-has-tip')) continue;
+      if (tipOf(el)) el.setAttribute('data-has-tip', '');
+    }
+  };
+  const scheduleMark = () => (marking ||= requestAnimationFrame(mark));
+  scheduleMark();
+
   new MutationObserver(() => {
+    scheduleMark();
     if (!target || target.isConnected) return;
     const under = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
     if (!adopt(find(under))) hide();

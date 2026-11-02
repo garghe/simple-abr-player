@@ -3038,11 +3038,11 @@ ul.issues li {
 }
 
 /* A dotted underline hints that a label explains itself. */
-table.kv th,
-.kv-grid small,
-.loud-tile small,
-.drm-facts .muted,
-.fact small {
+table.kv th[data-has-tip],
+.kv-grid small[data-has-tip],
+.loud-tile small[data-has-tip],
+.drm-facts .muted[data-has-tip],
+.fact[data-has-tip] small {
   text-decoration: underline dotted color-mix(in srgb, var(--muted) 45%, transparent);
   text-underline-offset: 3px;
 }
@@ -3262,4 +3262,20 @@ dialog.welcome::backdrop {
   .wl-caps {
     grid-template-columns: 1fr;
   }
+}
+
+/* Loudness card: explained values and the short explainer. */
+.loud-details span[data-tip],
+.ch-head span[data-tip] {
+  text-decoration: underline dotted color-mix(in srgb, var(--muted) 45%, transparent);
+  text-underline-offset: 3px;
+}
+.loud-card [data-tip] {
+  cursor: help;
+}
+.loud-explain {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--row-line);
+  line-height: 1.5;
 }

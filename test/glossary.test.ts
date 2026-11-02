@@ -12,6 +12,8 @@ describe('glossary', () => {
       'Estimated bandwidth', 'Buffer', 'Time to first frame', 'Live latency', 'DVR window',
       'Codec in media', 'Keyframe start', 'Measured avg / peak', 'Last change',
       'CRC-32', 'Splice point (player time)', 'Fill', 'Origin', 'Threshold', 'For at least',
+      'Track (manifest)', 'Decoded by browser', 'Channel order', 'Measured from', 'Output device', 'Dolby decoding here',
+      'Key status (2)', 'Video renditions (6)', 'MSE / ManagedMediaSource', 'Detail',
       'Security level', 'Key ID', 'Rendition', 'Dropped frames', 'Scheme', 'Keys', 'Licence', 'Request',
     ];
     const missing = labels.filter((l) => !tipFor(l));

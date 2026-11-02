@@ -31,6 +31,8 @@ export class StreamHealthCache {
 
 interface SubView {
   id: string;
+  /** Tooltip for the sub-view button. */
+  tip?: string;
   label: string;
   el: HTMLElement;
   render(): void;
@@ -59,14 +61,14 @@ export class HealthTab {
   constructor(private readonly ctrl: PlayerController) {
     this.cache = new StreamHealthCache(ctrl);
     this.el.append(this.nav);
-    this.addView({ id: 'stream', label: 'Stream', el: this.streamEl, render: () => this.renderStream() });
+    this.addView({ id: 'stream', label: 'Stream', tip: 'Checks on the playlists or MPD and on every downloaded segment.', el: this.streamEl, render: () => this.renderStream() });
     const alignment = new AlignmentView(ctrl);
     this.addView({ id: 'alignment', label: 'Rendition alignment', el: alignment.el, render: () => alignment.render() });
   }
 
   addView(view: SubView) {
     this.views.push(view);
-    const b = h('button', { type: 'button', role: 'tab', onclick: () => this.show(view.id) }, view.label);
+    const b = h('button', { type: 'button', role: 'tab', 'data-tip': view.tip, onclick: () => this.show(view.id) }, view.label);
     this.buttons.set(view.id, b);
     this.nav.append(b);
     this.el.append(view.el);

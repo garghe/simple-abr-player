@@ -165,26 +165,70 @@ export class Dashboard {
       return card;
     }
     const value = Number.isFinite(r.integrated) ? r.integrated : r.shortTerm;
+    const judged = Number.isFinite(r.integrated) ? 'integrated' : 'short-term';
     const off = Number.isFinite(value) ? Math.abs(value - std.target) : Infinity;
     const status = off <= std.tolerance ? ['on target', 'ok'] : off <= 3 ? ['close', 'out'] : ['off target', 'warn'];
+    const t = (n: number) => String(n).replace('-', '−');
+    // Says what it judges: the integrated value, which delivery specs check.
+    const diff = Number.isFinite(value) ? value - std.target : NaN;
+    const by = Number.isFinite(diff) ? `${Math.abs(diff).toFixed(1)} LU ${diff > 0 ? 'louder' : 'quieter'} than` : 'compared with';
+    const meaning =
+      status[0] === 'on target'
+        ? `on target: within ±${std.tolerance} LU, as ${std.name} asks.`
+        : status[0] === 'close'
+          ? `close: outside the ±${std.tolerance} LU ${std.name} allows, but within 3 LU. Worth a look for delivery; not an alarm.`
+          : `off target: more than 3 LU away. Needs correcting for delivery.`;
+    const verdict = h(
+      'span',
+      {
+        'data-tip': `${judged === 'integrated' ? 'Integrated loudness (everything measured so far)' : 'Short-term loudness (integrated needs a few seconds of audio first)'} is ${by} the ${t(std.target)} ${std.unit} target, so ${meaning} The alarm is separate: it raises when short-term loudness stays more than ${this.d.alarms.settings.loudnessTolerance} LU off for ${this.d.alarms.settings.hold.loudness} s.`,
+      },
+      badge(`${judged}: ${status[0]}`, status[1]),
+    );
+    const details = h(
+      'div',
+      { class: 'muted small loud-details' },
+      h('span', { 'data-tip': 'Integrated: gated loudness of everything measured since loading (or since the audio track changed). The value delivery specs check.' }, `Integrated ${fmtLu(r.integrated)} ${std.unit}`),
+      ' · ',
+      h('span', { 'data-tip': `True peak: the highest level between samples, as after conversion to analogue. ${std.name} allows up to ${t(std.maxTruePeak)} dBTP.` }, `true peak ${fmtLu(r.truePeakMax)} dBTP`),
+      ' · ',
+      h('span', { 'data-tip': 'Loudness range (LRA): how much the loudness varies over time, in LU. Speech-led TV is usually under 10 LU; a beep test tone reads high.' }, `LRA ${fmtLu(r.lra)} LU`),
+    );
+    const explainer = h(
+      'p',
+      { class: 'loud-explain muted small' },
+      `Loudness is how loud the audio sounds, in ${std.unit}: ${std.name} aims for ${t(std.target)}, and values closer to 0 are louder (each 1 LU is about 1 dB). `,
+      `Short-term covers the last 3 s, integrated everything so far; channel bars show each channel’s peak in dBFS, where 0 is the digital maximum.`,
+    );
     // Gauge: −40 … 0 LUFS.
     const pos = Number.isFinite(value) ? Math.max(0, Math.min(1, (value + 40) / 40)) : 0;
     if (compact) {
       card.append(
-        h('div', { class: 'loud-row' }, h('div', { class: 'loud-big' }, fmtLu(r.shortTerm)), h('div', { class: 'muted small' }, `${std.unit} short-term`), h('span', { class: 'spacer' }), badge(status[0], status[1])),
         h(
           'div',
-          { class: 'loud-bar' },
+          { class: 'loud-row' },
+          h('div', { class: 'loud-big', 'data-tip': 'Short-term loudness: the last 3 seconds. The reading to watch while monitoring.' }, fmtLu(r.shortTerm)),
+          h('div', { class: 'muted small' }, `${std.unit} short-term`),
+          h('span', { class: 'spacer' }),
+          verdict,
+        ),
+        h(
+          'div',
+          {
+            class: 'loud-bar',
+            'data-tip': `Short-term loudness (marker) on a −40 to 0 ${std.unit} scale. The green zone is the target, ${t(std.target)} ±${std.tolerance} LU.`,
+          },
           h('div', { class: 'zone', style: `left:${((std.target - std.tolerance + 40) / 40) * 100}%;width:${((2 * std.tolerance) / 40) * 100}%` }),
           h('div', { class: 'mark', style: `left:${(Number.isFinite(r.shortTerm) ? Math.max(0, Math.min(1, (r.shortTerm + 40) / 40)) : 0) * 100}%` }),
         ),
         h('div', { class: 'loud-ticks mono' }, h('span', null, '−40'), h('span', null, '−30'), h('span', null, '−20'), h('span', null, '−10'), h('span', null, '0')),
-        h('div', { class: 'muted small' }, `Integrated ${fmtLu(r.integrated)} · true peak ${fmtLu(r.truePeakMax)} dBTP · LRA ${fmtLu(r.lra)} LU`),
+        details,
         this.channelStrip(r.channels),
+        explainer,
       );
       return card;
     }
-    const gauge = h('div', { class: 'gauge' });
+    const gauge = h('div', { class: 'gauge', 'data-tip': `${judged === 'integrated' ? 'Integrated' : 'Short-term'} loudness on a −40 to 0 ${std.unit} scale. ${std.name} target: ${t(std.target)} ${std.unit}.` });
     gauge.innerHTML = `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" class="track" stroke-dasharray="188 251" transform="rotate(135 50 50)"/><circle cx="50" cy="50" r="40" class="value" stroke-dasharray="${pos * 188} 251" transform="rotate(135 50 50)"/></svg>`;
     card.append(
       h(
@@ -194,12 +238,23 @@ export class Dashboard {
         h(
           'div',
           { class: 'loud-text' },
-          h('div', { class: 'loud-big' }, fmtLu(value)),
-          h('div', { class: 'muted small' }, `${std.unit} ${Number.isFinite(r.integrated) ? 'integrated' : 'short-term'}`),
-          h('div', { class: 'small' }, `TP ${fmtLu(r.truePeakMax)} dBTP `, badge(status[0], status[1])),
+          h(
+            'div',
+            { class: 'loud-big', 'data-tip': judged === 'integrated' ? 'Integrated loudness: everything measured since loading. The value delivery specs check.' : 'Short-term loudness: the last 3 seconds (integrated needs a few seconds of audio first).' },
+            fmtLu(value),
+          ),
+          h('div', { class: 'muted small' }, `${std.unit} ${judged}`),
+          h(
+            'div',
+            { class: 'small' },
+            h('span', { 'data-tip': `True peak: the highest level between samples. ${std.name} allows up to ${t(std.maxTruePeak)} dBTP.` }, `TP ${fmtLu(r.truePeakMax)} dBTP`),
+            ' ',
+            verdict,
+          ),
         ),
       ),
       this.channelStrip(r.channels),
+      explainer,
     );
     return card;
   }
@@ -221,11 +276,18 @@ export class Dashboard {
     return h(
       'div',
       { class: 'ch-strip' },
-      h('div', { class: 'ch-head muted small' }, channels.length === 6 ? '5.1' : `${channels.length} ch`, flagged.length ? badge(flagged.map((c) => `${c.label} ${c.flag}`).join(' · '), 'warn') : ''),
+      h(
+        'div',
+        { class: 'ch-head muted small' },
+        h('span', { 'data-tip': 'Peak level of each channel over the last 1.5 s, in dBFS: 0 is the digital maximum, −60 or less is silence. A channel silent while others play, or 10 dB quieter than the loudest, is flagged.' }, `${channels.length === 6 ? '5.1' : `${channels.length} ch`} · peak dBFS`),
+        flagged.length ? badge(flagged.map((c) => `${c.label} ${c.flag}`).join(' · '), 'warn') : ''),
       states.map((c) =>
         h(
           'div',
-          { class: `ch-row${c.flag ? ` ${c.flag}` : ''}`, title: `${c.label}: ${fmtLu(c.peak)} dBFS peak` },
+          {
+            class: `ch-row${c.flag ? ` ${c.flag}` : ''}`,
+            'data-tip': `${c.label}: peak ${fmtLu(c.peak)} dBFS in the last 1.5 s${c.flag === 'silent' ? ' — silent while other channels play' : c.flag === 'low' ? ' — more than 10 dB below the loudest channel' : ''}.`,
+          },
           h('span', { class: 'ch-l' }, c.label),
           h('span', { class: 'ch-m' }, h('i', { style: `width:${pct(c.peak)}%` })),
           h('span', { class: 'ch-v mono' }, Number.isFinite(c.peak) && c.peak > -90 ? Math.round(c.peak).toString().replace('-', '−') : '−∞'),

@@ -33,6 +33,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 - **Inspect | Monitor** switch; the choice is remembered per kind of stream (live/VOD), and Copy link includes the view.
 - **Welcome guide**: opens on the first visit (and from the **?** button or the `?` key) with what PlayProbe checks, how to use it and handy keys, plus a **Try the demo stream** button.
 - **Link previews**: Open Graph and Twitter tags and a 1200×630 preview image (`npm run og-image`), so a shared playprobe.xyz link shows the logo, name and tagline.
+- **Loudness card**: tooltips on every value, a short explainer of LUFS / LU / dBFS, channel meters labelled *peak dBFS*, and a badge that says what it judges (*integrated: close*) with a tooltip on what that means.
 - **Tooltips** that explain tabs, cards, health-score lines, table headers, Stats, DRM and loudness values, SCTE-35 fields, alarms and settings, on hover, keyboard focus or tap.
 
 ### Changed
@@ -46,6 +47,8 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 - The dashboard's channel meters show the highest level of the last 1.5 s, so short sounds (beeps, speech) no longer leave them looking empty.
 - On live streams that count time from 1970 (e.g. livesim2), the timeline axis and the alarm log show clock time instead of huge hour counts like `498239:26:00`.
 - **Out of phase** is judged only when there is real audio (above −40 dBFS): the correlation of near-silence between beeps no longer counts, and quiet gaps no longer stop the alarm from raising on out-of-phase audio.
+- Tooltips for the Audio, DRM, Device, Health, Network, Tracks and SCTE-35 builder labels that had none; the dotted underline now appears only on labels that have an explanation.
+- A tooltip waiting to show is no longer lost when its card redraws.
 - The active item in the Monitor navigation rail no longer crowds its label.
 - Tooltips no longer blink while the dashboard refreshes, and tab names show their explanation instead of repeating the name.
 - License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.

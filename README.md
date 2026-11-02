@@ -268,7 +268,7 @@ The header holds the logo with the version, the navigation, **Copy link**, **Exp
 **Tooltips.** Labels across the app explain themselves: tab names, card titles, dashboard facts and health-score lines, table headers, Stats and DRM values, loudness readings, SCTE-35 fields and builder inputs, alarm names and DRM settings.
 
 - Hover (about a third of a second), focus with the keyboard, or tap a label on a touch screen. `Esc` or scrolling hides it.
-- Labels with an explanation have a dotted underline in the summary tables and cards.
+- Labels with an explanation have a dotted underline in the summary tables and cards (only those that have one).
 - The texts live in one place, `src/ui/glossary.ts`, keyed by the label as shown. A key can carry a context (`scte:health`, `fact:audio`) when the same word means different things in different places.
 
 ![Welcome guide](docs/screenshots/welcome.png)

@@ -61,9 +61,11 @@ try {
   {
     const page = await open('alarms-demo/master.m3u8');
     await page.click('button.tab:has-text("Alarms")');
-    await play(page, 4);
+    // 2×: the picture is sampled every 250 ms of wall time, so faster playback
+    // leaves too few samples in the 4 s black section for a 2 s hold.
+    await play(page, 2);
     let bannerSeen = '';
-    for (let i = 0; i < 90 && !(await page.evaluate(() => document.querySelector('video').ended)); i++) {
+    for (let i = 0; i < 180 && !(await page.evaluate(() => document.querySelector('video').ended)); i++) {
       await page.waitForTimeout(250);
       const b = await page.evaluate(() => (document.querySelector('#alarm-banner').hidden ? '' : document.querySelector('#alarm-banner').textContent));
       if (b && !bannerSeen) bannerSeen = b;
