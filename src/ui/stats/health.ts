@@ -107,7 +107,7 @@ export class HealthTab {
             const [label, kind] = SEVERITY_BADGE[list[0].severity];
             const d = h(
               'details',
-              { class: `issue-group ${list[0].severity}`, open: this.open.has(id) || list.length === 1 },
+              { class: `issue-group sev-${list[0].severity}`, open: this.open.has(id) || list.length === 1 },
               h('summary', null, badge(label, kind), ' ', h('strong', null, list[0].title), list.length > 1 ? h('span', { class: 'muted' }, ` ×${list.length}`) : ''),
               h(
                 'ul',
@@ -163,7 +163,7 @@ export class HealthTab {
       ...(streams.length
         ? [
             h('h3', null, 'Renditions played'),
-            dataTable(
+            h('div', { class: 'table-scroll' }, dataTable(
               ['Rendition', 'Codec declared', 'Codec in media', 'Bitrate declared', 'Measured avg / peak', 'Keyframe start'],
               streams.map((s) => {
                 const segs = m.segments.filter((r) => r.streamId === s.id);
@@ -183,7 +183,7 @@ export class HealthTab {
                 ];
               }),
               'compact',
-            ),
+            )),
           ]
         : []),
       h(

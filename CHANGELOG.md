@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Planned as 1.1.0 (PlayReady) and 1.2.0 (SCTE-35 tools).
+Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools) and 1.3.0 (stream health, rendition alignment, picture and sound alarms).
 
 ### Added
 
@@ -23,6 +23,10 @@ Planned as 1.1.0 (PlayReady) and 1.2.0 (SCTE-35 tools).
 - **SCTE-35 message builder** with presets, output as base64, hex, HLS tags and DASH EventStream.
 - Marker and break navigation: `n` / `p` / `b` / `s` keys, buttons, and a Skip button on the ad-break banner.
 - **SCTE-35 health demo** sample stream with an inserted ad pod and deliberate signalling errors; `npm run test:e2e:scte`.
+- **Health tab: stream checks** on playlists, MPDs and every downloaded segment (fMP4/CMAF and MPEG-2 TS): target duration, media and discontinuity sequence numbering between refreshes, PROGRAM-DATE-TIME drift, stale live playlists and MPDs, SegmentTimeline and period gaps, segments not starting with a keyframe, duration and timestamp gaps, declared vs real codecs and bitrate.
+- **Rendition alignment**: fetches the same segments of every video rendition and compares boundaries, media timestamps, durations and keyframes side by side.
+- **Alarms tab**: black and frozen picture, silence, a lost channel, loudness off target, true peaks and out-of-phase stereo, with hold times in content time, an alarm banner on the video, timeline marks, a log with CSV export, sound or browser notification, and adjustable thresholds.
+- **Stream health & alarms demo** sample (`npm run sample:alarms`) and `npm run test:e2e:health`.
 
 ### Changed
 

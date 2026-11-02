@@ -795,7 +795,8 @@ export class PlayerController extends EventTarget {
     const total = picked.length * (count + 1);
     const rows: AlignRow[] = [];
     for (const stream of picked) {
-      const row: AlignRow = { streamId: stream.id, label: `${stream.height ?? '?'}p ${Math.round((stream.bandwidth ?? 0) / 1000)} kbps`, cells: [] };
+      const bw = stream.bandwidth || Math.max(0, ...manifest.variants.filter((v) => v.video?.id === stream.id).map((v) => v.bandwidth));
+      const row: AlignRow = { streamId: stream.id, label: `${stream.height ?? '?'}p${bw ? ` ${Math.round(bw / 1000)} kbps` : ''}`, cells: [] };
       rows.push(row);
       try {
         await stream.createSegmentIndex();

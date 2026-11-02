@@ -3,6 +3,13 @@ import type { AlignCell } from '../../stream/alignment';
 import { badge, h } from '../dom';
 import { formatBytes, formatTime } from '../format';
 import { SEVERITY_BADGE, severitySummary } from '../scte/health';
+import type { StreamIssue } from '../../stream/monitor';
+
+const groupIssues = (issues: StreamIssue[]) => {
+  const m = new Map<string, StreamIssue[]>();
+  for (const i of issues) m.set(`${i.severity}|${i.title}`, [...(m.get(`${i.severity}|${i.title}`) ?? []), i]);
+  return m;
+};
 
 /**
  * Alignment sub-view: fetches the same segments of every video rendition at
@@ -82,9 +89,16 @@ export class AlignmentView {
     };
     this.body.replaceChildren(
       h('div', { class: 'toolbar' }, severitySummary(r.issues), h('span', { class: 'spacer' }), h('span', { class: 'muted small' }, `At ${formatTime(r.time)} · checked ${r.checkedAt.toISOString().slice(11, 19)}Z`)),
-      r.issues.length
-        ? h('ul', { class: 'issues' }, r.issues.map((i) => h('li', null, badge(...SEVERITY_BADGE[i.severity]), ' ', h('strong', null, i.title), ' — ', h('span', { class: 'muted small' }, `${i.where}: `), i.detail)))
-        : h('p', null, 'All renditions are aligned for the segments checked.'),
+      ...(r.issues.length
+        ? [...groupIssues(r.issues).values()].map((list) =>
+            h(
+              'details',
+              { class: `issue-group sev-${list[0].severity}`, open: list.length === 1 },
+              h('summary', null, badge(...SEVERITY_BADGE[list[0].severity]), ' ', h('strong', null, list[0].title), list.length > 1 ? h('span', { class: 'muted' }, ` ×${list.length}`) : ''),
+              h('ul', { class: 'issues' }, list.map((i) => h('li', null, h('span', { class: 'muted small' }, `${i.where}: `), i.detail))),
+            ),
+          )
+        : [h('p', null, 'All renditions are aligned for the segments checked.')]),
       h(
         'div',
         { class: 'align-wrap' },

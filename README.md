@@ -20,6 +20,8 @@
 - [Build and run in production](#build-and-run-in-production)
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Screenshots](#screenshots)
+- [Stream health and rendition alignment](#stream-health-and-rendition-alignment)
+- [Picture and sound alarms](#picture-and-sound-alarms)
 - [SCTE-35 support](#scte-35-support)
   - [SCTE-35 tools](#scte-35-tools)
 - [Audio levels and loudness](#audio-levels-and-loudness)
@@ -53,6 +55,8 @@
 | **DRM** | **Widevine** (Chrome, Edge, Firefox, Android), **PlayReady** (Edge on Windows, Smart TVs, Xbox) and **FairPlay** (Safari). Works with any license server: license URL, request headers and, if needed, generic request/response formats, with no provider-specific settings. Saved profiles. License requests can go through the CORS proxy. |
 | **Stats: DRM** | DRM system and security level in use (Widevine L1/L3, PlayReady SL3000/SL2000), protection declared by the stream (systems, key IDs, decoded PSSH and PlayReady headers, HLS key tags, license URLs in the stream with a *Use this* button), live key status per key ID, and every license and certificate request with timing and the raw request and response. |
 | **Stats: Device** | Codec support (Media Source Extensions plus a 1080p smoothness check), DRM support and security levels (Widevine, PlayReady, FairPlay, ClearKey), HDCP version, HDR display and colour range. |
+| **Stats: Health** | **Stream checks** on the playlists, MPD and every downloaded segment: target duration, sequence numbering between refreshes, PROGRAM-DATE-TIME drift, stale live playlists, timeline gaps, segments without a keyframe at the start, duration and timestamp gaps, real vs declared codecs and bitrate. **Rendition alignment** compares the same segments of every video rendition. See [Stream health](#stream-health-and-rendition-alignment). |
+| **Stats: Alarms** | **Picture and sound alarms**: black, frozen picture, silence, a lost channel, loudness off target, true peaks and out-of-phase stereo, with an alarm banner on the video, a log, CSV export, sound or browser notification, and adjustable thresholds. See [Alarms](#picture-and-sound-alarms). |
 | **Stats: Log** | Loading steps, quality switches, track changes, stalls and errors. |
 | **Light / dark theme** | The header button cycles **System** (follows your OS setting), **Light** and **Dark**. The choice is remembered. The video area stays dark in both themes, as video players normally do. |
 | **Resizable layout** | Drag the handle between the player and the stats panel: drag left for a wider stats panel and a smaller player, right for the opposite. The width is remembered. Double-click the handle to reset; with the handle focused, arrow keys also resize it. |
@@ -73,7 +77,7 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**, paste a DASH or HLS URL and press **Load**. You can also pick a stream from the **Test streams…** menu. The three **Bundled sample** entries work fully offline and contain SCTE-35 markers; the **SCTE-35 health demo** has deliberate signalling errors and an inserted ad pod.
+Open **http://localhost:5173**, paste a DASH or HLS URL and press **Load**. You can also pick a stream from the **Test streams…** menu. The four **Bundled sample** entries work fully offline and contain SCTE-35 markers; the **SCTE-35 health demo** has deliberate signalling errors and an inserted ad pod, and the **Stream health & alarms demo** trips every alarm and several stream checks.
 
 You can also link straight to a stream:
 
@@ -91,7 +95,9 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm test` | Runs the unit tests (Vitest). |
 | `npm run typecheck` | Checks TypeScript types only. |
 | `npm run sample` | Regenerates the bundled SCTE-35 sample (needs `ffmpeg`). |
+| `npm run sample:alarms` | Regenerates the stream health & alarms demo (needs `ffmpeg`). |
 | `npm run sample:issues` | Regenerates the SCTE-35 health demo from the bundled sample (no `ffmpeg` needed). |
+| `npm run test:e2e:health` | Checks stream health, rendition alignment and the alarms end to end in headless Chromium. Add `-- --shots` to refresh their screenshots. |
 | `npm run test:e2e:scte` | Checks the SCTE-35 tools end to end in headless Chromium on the bundled samples. Add `-- --shots` to refresh the SCTE screenshots. |
 | `npm run test:e2e:drm` | Runs the DRM pipeline end to end in headless Chromium with ClearKey and a local test license server. Add `-- --shots` to refresh the DRM screenshots. |
 | `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
@@ -222,6 +228,15 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 **SCTE-35 tab during an ad break (DASH sample)**: ad-break banner on the video, markers and break regions on the seek bar, the marker list, and the decoded detail of an in-band `time_signal`.
 ![SCTE-35](docs/screenshots/scte-dash.png)
 
+**Health: stream checks (alarms demo sample)**: segments longer than the target duration, a bitrate above the declared BANDWIDTH and a wrong codec string, with the playlists and renditions read.
+![Stream health](docs/screenshots/health-stream.png)
+
+**Health: rendition alignment**: 180p has 3 s segments and 360p 2 s, so boundaries and timestamps don't line up.
+![Rendition alignment](docs/screenshots/health-alignment.png)
+
+**Alarms**: every alarm the demo stream trips, with durations and details.
+![Alarms](docs/screenshots/alarms.png)
+
 **SCTE-35 Health (health demo sample)**: the problems planted in the demo stream, grouped by check, each linking to its marker.
 ![SCTE-35 health](docs/screenshots/scte-health.png)
 
@@ -273,6 +288,50 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 **Phone layout**: controls sit under the video; the stats panel stacks below.
 
 <img src="docs/screenshots/mobile.png" alt="Phone layout" width="390">
+
+---
+
+## Stream health and rendition alignment
+
+The **Health** tab checks the stream itself while it plays. PlayProbe reads every playlist or MPD refresh and every segment the player downloads (fMP4/CMAF and MPEG-2 TS), without decoding: the real codec string from the init segment, the decode time, duration and keyframe of each segment.
+
+| Check | Severity |
+| --- | --- |
+| **Segment longer than `EXT-X-TARGETDURATION`** (rounded), or than the MPD's `@maxSegmentDuration` | error; warning |
+| **`EXT-X-TARGETDURATION` changed**, **media sequence went backwards**, a **segment changed its sequence number**, or the **discontinuity sequence** doesn't match the discontinuities that left the window | error |
+| **Segments skipped between refreshes** (the playlist moved past segments this player never saw) | warning |
+| **PROGRAM-DATE-TIME** drifting from the segment durations, or changing between refreshes | warning |
+| **Live playlist / MPD not updating** for 3× the target / segment duration (error at 6×) | warning |
+| **Gap or overlap** in a SegmentTimeline or between periods | warning |
+| **Segment does not start with a keyframe** | error |
+| Segment **duration** in the media differs from the manifest; **gap or overlap** between the media timestamps of neighbouring segments | warning |
+| **Codec string** in the manifest differs from the init segment (e.g. wrong profile or level), or isn't declared | warning |
+| **Bitrate** above the declared HLS `BANDWIDTH` (peak, video alone) or DASH `@bandwidth` (average) | warning |
+
+The tab also lists the media playlists (target duration, window, refreshes, last change), the MPD timelines, and each rendition played with declared vs real codec, declared vs measured bitrate and how many segments started with a keyframe.
+
+**Rendition alignment** fetches the same segments (1, 3 or 5) of every video rendition (up to 10) from the playhead, through the player's own segment index, so HLS and DASH, templates and byte ranges all work. It compares segment boundaries in the manifest, timestamps and durations in the media, and keyframes, and shows them side by side. Seamless quality switching needs all of them to match. It fetches extra data, so it runs only when you press the button.
+
+---
+
+## Picture and sound alarms
+
+The **Alarms** tab watches what the viewer gets, for leaving a channel running in an operations room. An alarm raises when its condition has lasted for the hold time (measured in content time, so it means the same at any playback speed) and clears after the condition has been gone for a second. Active alarms show as a red banner on the video and on the SCTE-35 timeline.
+
+| Alarm | Default threshold | Hold |
+| --- | --- | --- |
+| **Black picture** | average luma below 6 % | 2 s |
+| **Frozen picture** | average change between frames below 0.2 % while the playhead moves | 5 s |
+| **Silence** | every channel below −60 dBFS | 5 s |
+| **Channel lost** | one channel (not LFE) below −60 dBFS while the others carry audio | 10 s |
+| **Loudness off target** | short-term loudness more than 6 LU from the target (EBU R128 −23 LUFS or ATSC A/85 −24 LKFS, from the Audio tab) | 20 s |
+| **True peak over limit** | above −1 dBTP (EBU) or −2 dBTP (ATSC) | instant |
+| **Out of phase** | L/R correlation below −0.3 | 5 s |
+
+Thresholds, hold times and which alarms are on are in **Alerts and thresholds**, with a sound and/or a browser notification when an alarm raises. The log keeps every alarm with start, duration and detail; **Export CSV** downloads it.
+
+- **Picture** alarms sample the video four times a second into a small canvas. Browsers don't let pages read DRM-protected video (or cross-origin video played without CORS), so picture alarms are unavailable there and the tab says why.
+- **Sound** alarms use the same measurements as the audio meters.
 
 ---
 
@@ -491,6 +550,11 @@ flowchart LR
 | `src/scte/timeline.ts`, `structure.ts`, `navigation.ts` | Lanes and spans for the timeline, nesting for the structure view, and where to seek for marker and break navigation. |
 | `src/scte/ssai.ts` | Content runs from HLS playlists and DASH periods, ad pods and interstitials, and their match with breaks. |
 | `src/scte/encode.ts`, `csv.ts` | SCTE-35 encoder (checked against the specification's sample) with HLS tag and DASH EventStream output; CSV export and hourly counts. |
+| `src/media/segment.ts` | Reads segments without decoding: fMP4 init (tracks, timescales, codec strings from avcC / hvcC / vpcC / av1C / esds), fMP4 fragments (decode time, duration, sync sample) and MPEG-2 TS (PTS, IDR / IRAP). |
+| `src/stream/monitor.ts`, `health.ts`, `mpd.ts` | Records playlist and MPD refreshes and downloaded segments; the stream health checks; SegmentTimeline parsing. |
+| `src/stream/alignment.ts` | Compares the same segments across renditions. |
+| `src/alarms/monitor.ts`, `picture.ts` | Alarm conditions with hold and release in content time; the picture sampler. |
+| `src/ui/stats/health.ts`, `src/ui/health/*`, `src/ui/stats/alarms.ts` | The Health tab (stream checks and alignment) and the Alarms tab. |
 | `src/ui/scte/*` | The SCTE-35 sub-views (health, timeline, structure, ad insertion, monitor and alerts, builder) and the navigator shared by the keys, buttons and banner. |
 | `src/ui/controls.ts`, `seekbar.ts` | Control bar, track selectors, keyboard shortcuts, and the seek bar with buffered regions and SCTE markers and breaks. |
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
@@ -556,6 +620,9 @@ sequenceDiagram
 │   ├── scte/                  SCTE-35 decoder/encoder, HLS cue parser, marker monitor, health checks, timing, ad insertion
 │   ├── audio/                 Audio meters: DSP, loudness, fMP4 reader, WebCodecs + Web Audio sources
 │   ├── drm/                   DRM settings, license request/response formats, protection parsing, monitor
+│   ├── media/                 Segment reader (fMP4 init and fragments, MPEG-2 TS)
+│   ├── stream/                Stream health checks, MPD timelines, rendition alignment
+│   ├── alarms/                Picture and sound alarms, picture sampler
 │   ├── ui/                    Controls, seek bar, chart, helpers
 │   │   ├── scte/              SCTE-35 views: health, timeline, structure, ad insertion, monitor, builder
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
@@ -565,10 +632,13 @@ sequenceDiagram
 ├── public/logo.svg, favicon.* App logo, favicons and home-screen icon
 ├── public/samples/scte-demo/  Bundled offline DASH + HLS sample with SCTE-35
 ├── public/samples/scte-issues/ SCTE-35 health demo (HLS with an inserted pod and signalling errors)
+├── public/samples/alarms-demo/ Stream health & alarms demo (picture, sound and stream problems)
 ├── scripts/
 │   ├── make-sample.mjs        Builds the sample with ffmpeg + adds SCTE-35 markers
 │   ├── make-issues-sample.mjs Builds the SCTE-35 health demo from the sample
 │   ├── e2e-scte.mjs           End-to-end checks of the SCTE-35 tools
+│   ├── make-alarms-sample.mjs Builds the stream health & alarms demo with ffmpeg
+│   ├── e2e-health.mjs         End-to-end checks of stream health, alignment and alarms
 │   ├── screenshots.mjs        Regenerates docs/screenshots with Playwright
 │   └── lib/scte35-encode.mjs  Minimal SCTE-35 encoder (sample + tests)
 ├── test/                      Vitest unit tests
@@ -597,6 +667,10 @@ The unit tests cover:
 - **DRM**: request formats (raw, base64, JSON template with escaping, form), response formats (auto-detect of binary, base64, `<ckc>`, JSON fields; ClearKey passed through), FairPlay content ID from `skd://` (UTF-8 and UTF-16), Widevine and ClearKey PSSH decoding from real streams, PlayReady headers v4.0 to v4.3 (GUID key IDs, `LA_URL`, entities) from PSSH, `mspr:pro` and HLS data URIs, SOAP licenses passed through, MPD and HLS key tags, init-segment boxes, error messages. The Worker tests also cover license POST forwarding and the size limit. The end-to-end DRM run is `npm run test:e2e:drm` (see [Testing DRM](#testing-drm)).
 - **Request routing**: manifests proxied, segments sent directly, relative segment URLs taken back out of the proxy, own-site files never proxied.
 
+- **Stream health, alignment and alarms**: the segment reader on the bundled sample and on synthetic TS (H.264 IDR / non-IDR), codec comparison, every playlist refresh check (sequence numbers, discontinuity sequence, target duration, PDT drift and changes, stale, ended), MPD timelines (repeats, gaps, long segments, stale), downloaded segment checks (codecs, duration, bitrate, timestamp gaps), rendition comparison (boundaries, timestamps, durations, keyframes, missing segments), and every alarm (hold, release, seeks, content-time at 4×, LFE ignored, disabled alarms).
+
+`npm run test:e2e:health` plays the stream health & alarms demo in headless Chromium at 4× and checks that every alarm raises, the banner, the timeline marks and the CSV; the stream checks (target duration, codec, bandwidth after switching to 360p) and the alignment failure; and that the clean sample has no stream problems, aligned renditions and no alarms.
+
 `npm run test:e2e:scte` plays the two bundled samples in headless Chromium and checks that every problem planted in the health demo is reported, that the clean sample passes, the ad pod and its fill, the timeline, structure, navigation keys, CSV download, the marker missing from the 240p playlist (after switching to it) and the builder.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
@@ -624,6 +698,13 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 - **6 s:** an 8 s break (`DATERANGE` + `CUE-OUT`) filled by a **6 s inserted pod** (segments from another folder, between discontinuities): underfill. One `CUE-OUT-CONT` states 7 s elapsed when 4 s have.
 - **16 s:** a Provider Placement Opportunity (2 s) with an advertisement inside it, whose end signal comes after 4 s. It is **missing from the 240p playlist** (switch the quality to 240p to see that check).
 - **32 s:** a `CUE-OUT` with no duration and no IN, carrying an `OATCLS` message with a **broken CRC**.
+
+### Stream health & alarms demo
+
+`public/samples/alarms-demo/` (pick **Stream health & alarms demo** from **Test streams…**) is a 76 s HLS stream made with ffmpeg by `npm run sample:alarms`:
+
+- **6–10 s** black picture, **10–18 s** frozen picture, **12–20 s** silence, **22–36 s** right channel lost, **38–62 s** too loud with true peaks, **64–72 s** out of phase.
+- The **180p** rendition has a keyframe every 3 s (3 s segments against 2 s for 360p, so rendition alignment fails) and claims a 2 s target duration. The master playlist declares a wrong codec level and a too-low `BANDWIDTH` for **360p** (switch to 360p to see those).
 
 ---
 

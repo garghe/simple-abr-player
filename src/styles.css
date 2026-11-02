@@ -1765,11 +1765,11 @@ pre .hl {
   border-left: 4px solid var(--info-text);
 }
 
-.issue-group.error {
+.issue-group.sev-error {
   border-left-color: var(--danger);
 }
 
-.issue-group.warn {
+.issue-group.sev-warn {
   border-left-color: var(--ad);
 }
 
@@ -2161,4 +2161,8 @@ ul.issues li {
 
 .alarm-banner[hidden] {
   display: none;
+}
+
+.table-scroll {
+  overflow-x: auto;
 }
