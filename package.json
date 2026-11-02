@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sample": "node scripts/make-sample.mjs",
+    "og-image": "node scripts/og-image.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "deploy": "npm run build && wrangler deploy",
     "test:e2e:drm": "node scripts/e2e-drm.mjs",

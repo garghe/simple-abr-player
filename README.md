@@ -106,6 +106,7 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm run test:e2e:drm` | Runs the DRM pipeline end to end in headless Chromium with ClearKey and a local test license server. Add `-- --shots` to refresh the DRM screenshots. |
 | `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
 | `npm run screenshots` | Regenerates the README screenshots (needs Playwright's Chromium). |
+| `npm run og-image` | Regenerates the link preview image `public/og-image.png` (needs Playwright's Chromium). |
 
 ---
 
@@ -211,6 +212,16 @@ Things to know when the proxy is on:
 - Keep the app on **Auto** mode, which only uses the proxy when a direct request fails. Streams that already allow browser access then use no Worker requests at all.
 - The local `npm run dev` proxy has no such limits and proxies segments too.
 - The Worker fetches from Cloudflare's network, not your office network, so origins that are only reachable internally (VPN or private IPs) still need the local `npm run dev` proxy.
+
+### Link previews (LinkedIn, X, Slack…)
+
+When playprobe.xyz is shared, social sites show a card with the logo, name and tagline. It comes from the Open Graph and Twitter tags in `index.html` and the 1200×630 image `public/og-image.png`.
+
+![Link preview image](public/og-image.png)
+
+- **Changing it:** edit the text in `scripts/og-image.mjs`, then run `npm run og-image` and deploy.
+- **Another domain:** the image and page addresses in `index.html` are absolute (`https://playprobe.xyz/…`), as LinkedIn requires. Change them if you deploy somewhere else.
+- **Refreshing a cached preview:** sites keep a preview for days. After deploying, paste the URL into [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/) to fetch it again. Other sites refresh on their own.
 
 ### Checking a deployment
 
@@ -686,6 +697,7 @@ sequenceDiagram
 │   ├── make-alarms-sample.mjs Builds the stream health & alarms demo with ffmpeg
 │   ├── e2e-health.mjs         End-to-end checks of stream health, alignment and alarms
 │   ├── screenshots.mjs        Regenerates docs/screenshots with Playwright
+│   ├── og-image.mjs           Renders the link preview image (public/og-image.png)
 │   └── lib/scte35-encode.mjs  Minimal SCTE-35 encoder (sample + tests)
 ├── test/                      Vitest unit tests
 └── docs/screenshots/          README images
