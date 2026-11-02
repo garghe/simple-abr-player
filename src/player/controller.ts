@@ -3,6 +3,8 @@ import { parseHlsCues, parseMasterPlaylist, type HlsCue } from '../scte/hls-cues
 import { checkScteHealth, type HealthIssue } from '../scte/health';
 import { StreamMonitor, type StreamIssue } from '../stream/monitor';
 import { checkStreamHealth } from '../stream/health';
+import { compareRenditions, type AlignmentResult, type AlignRow } from '../stream/alignment';
+import { parseInit, segmentTiming, type InitInfo } from '../media/segment';
 import { dashRuns, findPods, podIssues, reportPods, type PodReport } from '../scte/ssai';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
@@ -766,6 +768,72 @@ export class PlayerController extends EventTarget {
     else if (ref) this.stream.noteSegment(stream.id, uri, ref.getStartTime(), ref.getEndTime(), bytes);
   }
 
+  /** Last rendition alignment check. */
+  alignment: AlignmentResult | null = null;
+
+  /**
+   * Fetches the same `count` segments of every video rendition from `time`
+   * on, reads their timing and keyframes, and compares them.
+   */
+  async checkAlignment(time: number, count = 3, onProgress?: (done: number, total: number) => void): Promise<AlignmentResult> {
+    const manifest = this.player.getManifest();
+    if (!manifest) throw new Error('No stream loaded');
+    const streams: shaka.extern.Stream[] = [];
+    for (const v of manifest.variants) if (v.video && !streams.some((s) => s.id === v.video!.id)) streams.push(v.video);
+    streams.sort((a, b) => (a.bandwidth ?? 0) - (b.bandwidth ?? 0));
+    const picked = streams.slice(-10);
+    const net = this.player.getNetworkingEngine()!;
+    const retry = this.player.getConfiguration().streaming.retryParameters;
+    const RT = shaka.net.NetworkingEngine.RequestType;
+    const fetch = async (uris: string[], start: number, end: number | null) => {
+      const req = shaka.net.NetworkingEngine.makeRequest(uris, retry);
+      if (start > 0 || end !== null) req.headers['Range'] = `bytes=${start}-${end ?? ''}`;
+      const res = await net.request(RT.SEGMENT, req).promise;
+      return toBytes(res.data).slice();
+    };
+    let done = 0;
+    const total = picked.length * (count + 1);
+    const rows: AlignRow[] = [];
+    for (const stream of picked) {
+      const row: AlignRow = { streamId: stream.id, label: `${stream.height ?? '?'}p ${Math.round((stream.bandwidth ?? 0) / 1000)} kbps`, cells: [] };
+      rows.push(row);
+      try {
+        await stream.createSegmentIndex();
+        const index = stream.segmentIndex;
+        const pos = index?.find(time);
+        if (!index || pos === null || pos === undefined) throw new Error('No segment at this time');
+        let init: InitInfo | null = null;
+        const initRef = initReferenceOf(index.get(pos));
+        if (initRef) {
+          init = parseInit(await fetch(initRef.uris, initRef.startByte, initRef.endByte));
+          row.codec = init?.tracks.find((t) => t.handler === 'vide')?.codec;
+        }
+        onProgress?.(++done, total);
+        for (let k = 0; k < count; k++) {
+          const ref = index.get(pos + k);
+          if (!ref) break;
+          const uris = ref.getUris();
+          const cell = { index: k, declaredStart: ref.getStartTime(), declaredEnd: ref.getEndTime(), uri: fromProxyUrl(uris[0] ?? '') } as AlignRow['cells'][number];
+          row.cells.push(cell);
+          try {
+            const data = await fetch(uris, ref.getStartByte(), ref.getEndByte());
+            cell.bytes = data.byteLength;
+            cell.actual = segmentTiming(data, init);
+          } catch (err) {
+            cell.error = describeShakaError(err);
+          }
+          onProgress?.(++done, total);
+        }
+      } catch (err) {
+        row.error = err instanceof Error ? err.message : describeShakaError(err);
+      }
+    }
+    const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
+    this.alignment = { time, rows, issues: compareRenditions(rows, fps ? 1 / fps : undefined), checkedAt: new Date() };
+    this.emit('alignment');
+    return this.alignment;
+  }
+
   /** Stream health: playlist / MPD and segment problems. */
   streamHealth(): StreamIssue[] {
     const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
@@ -972,4 +1040,29 @@ function xmlSummary(node: XmlNode): string {
     stack.push(...children(n));
   }
   return parts.join(' · ') || localName(node);
+}
+
+/**
+ * The init segment of a segment reference. Shaka's compiled build renames the
+ * field, so find the object that looks like an InitSegmentReference
+ * (byte range + timescale) and the function that returns its URIs.
+ */
+function initReferenceOf(ref: shaka.media.SegmentReference | null): { uris: string[]; startByte: number; endByte: number | null } | null {
+  if (!ref) return null;
+  for (const value of Object.values(ref as unknown as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || !('startByte' in value) || !('timescale' in value)) continue;
+    const init = value as Record<string, unknown>;
+    for (const fn of Object.values(init)) {
+      if (typeof fn !== 'function') continue;
+      try {
+        const uris = (fn as () => unknown).call(init);
+        if (Array.isArray(uris) && typeof uris[0] === 'string') {
+          return { uris: uris as string[], startByte: Number(init.startByte) || 0, endByte: typeof init.endByte === 'number' ? init.endByte : null };
+        }
+      } catch {
+        /* not the URI getter */
+      }
+    }
+  }
+  return null;
 }

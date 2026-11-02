@@ -3,6 +3,7 @@ import type { StreamIssue } from '../../stream/monitor';
 import { badge, dataTable, h } from '../dom';
 import { formatTime } from '../format';
 import { SEVERITY_BADGE, severitySummary } from '../scte/health';
+import { AlignmentView } from '../health/alignment';
 
 /** Stream health, cached: recomputed when segments/playlists change, and every 2 s (stale checks). */
 export class StreamHealthCache {
@@ -59,6 +60,8 @@ export class HealthTab {
     this.cache = new StreamHealthCache(ctrl);
     this.el.append(this.nav);
     this.addView({ id: 'stream', label: 'Stream', el: this.streamEl, render: () => this.renderStream() });
+    const alignment = new AlignmentView(ctrl);
+    this.addView({ id: 'alignment', label: 'Rendition alignment', el: alignment.el, render: () => alignment.render() });
   }
 
   addView(view: SubView) {

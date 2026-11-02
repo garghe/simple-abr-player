@@ -2089,3 +2089,22 @@ ul.issues li {
   align-items: center;
   margin: 6px 0 10px;
 }
+
+/* ---- Health: rendition alignment ---- */
+.align-controls {
+  flex-wrap: wrap;
+}
+
+.align-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+
+.align-table td {
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.align-cell.bad {
+  background: var(--danger-bg);
+}

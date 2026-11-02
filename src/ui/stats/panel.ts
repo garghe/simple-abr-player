@@ -48,7 +48,7 @@ export class StatsPanel {
       { id: 'audio', label: 'Audio', view: new AudioTab(ctrl, audio), events: ['audio', 'tracks', 'loaded', 'documents'] },
       { id: 'drm', label: 'DRM', view: new DrmTab(ctrl, drmActions), events: ['drm', 'loaded', 'tracks'], count: () => ctrl.drm.exchanges.filter((x) => x.error).length },
       { id: 'scte', label: 'SCTE-35', view: this.scteTab, events: ['scte', 'tick', 'loaded'], count: () => ctrl.scte.size },
-      { id: 'health', label: 'Health', view: this.healthTab, events: ['stream', 'tick', 'loaded'], count: () => this.healthTab.cache.count() },
+      { id: 'health', label: 'Health', view: this.healthTab, events: ['stream', 'tick', 'loaded', 'alignment'], count: () => this.healthTab.cache.count() },
       { id: 'network', label: 'Network', view: new NetworkTab(ctrl), events: ['network'], count: () => ctrl.network.filter((e) => e.error).length },
       { id: 'manifest', label: 'Manifest', view: new ManifestTab(ctrl), events: ['documents'] },
       { id: 'device', label: 'Device', view: new DeviceTab(), events: [] },
