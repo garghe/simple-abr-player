@@ -12,7 +12,7 @@
       } catch {}
     </script>
     <title>PlayProbe</title>
-    <meta name="description" content="PlayProbe: play and inspect MPEG-DASH and HLS streams (DRM, SCTE-35, audio loudness, stats for nerds)." />
+    <meta name="description" content="PlayProbe: play, inspect and monitor MPEG-DASH and HLS streams — stream health, SCTE-35, DRM, loudness and picture/sound alarms." />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -20,20 +20,28 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">
-        <img class="logo" src="logo.svg" alt="" width="26" height="26" />
-        <span>PlayProbe</span>
-        <a id="app-version" class="app-version" target="_blank" rel="noopener"></a>
-        <span class="tagline">DASH · HLS · DRM · SCTE-35</span>
+      <div class="topbar-row">
+        <div class="brand">
+          <img class="logo" src="logo.svg" alt="" width="30" height="30" />
+          <span class="brand-name">PlayProbe</span>
+          <a id="app-version" class="app-version" target="_blank" rel="noopener"></a>
+        </div>
+        <nav id="tabs" class="appnav" role="tablist" aria-label="Views"></nav>
+        <div class="top-actions">
+          <button type="button" id="share-btn" class="ghost" title="Copy a link that loads this stream in this view">Copy link</button>
+          <button type="button" id="export-btn" class="ghost" title="Download stats, tracks, SCTE log, health, alarms and network log as JSON">Export</button>
+          <button type="button" id="theme-btn" class="theme-btn"></button>
+        </div>
       </div>
-      <form id="load-form" class="load-form" autocomplete="off">
+      <form id="load-form" class="loadbar" autocomplete="off">
+        <span id="format-chip" class="format-chip" hidden></span>
         <input id="url" type="url" list="url-history" required placeholder="Paste an MPEG-DASH (.mpd) or HLS (.m3u8) URL" aria-label="Stream URL" />
         <datalist id="url-history"></datalist>
         <select id="presets" aria-label="Test streams"></select>
-        <button type="submit" class="primary" id="load-btn">Load</button>
-        <button type="button" id="drm-btn" class="theme-btn" title="DRM settings (Widevine / FairPlay)" aria-expanded="false"></button>
-        <button type="button" id="theme-btn" class="theme-btn"></button>
-        <button type="button" id="settings-btn" class="icon-btn" title="Load settings" aria-label="Load settings" aria-expanded="false"></button>
+        <button type="button" id="drm-btn" class="chip-btn" title="DRM settings (Widevine / PlayReady / FairPlay)" aria-expanded="false"></button>
+        <button type="button" id="settings-btn" class="chip-btn" title="Load settings: CORS proxy, headers, low latency" aria-label="Load settings" aria-expanded="false"></button>
+        <button type="submit" class="primary probe" id="load-btn">Probe stream</button>
+        <div id="view-toggle" class="view-toggle" role="group" aria-label="View"></div>
       </form>
     </header>
 
@@ -78,7 +86,8 @@
           <div id="spinner" class="spinner" hidden></div>
           <div id="controls" class="controls"></div>
         </div>
-        <div id="stream-summary" class="stream-summary"></div>
+        <div id="stream-summary" class="facts"></div>
+        <div id="stage-extras" class="stage-extras"></div>
       </section>
 
       <div
@@ -86,20 +95,12 @@
         class="splitter"
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize stats panel (drag, arrow keys, double-click to reset)"
+        aria-label="Resize side panel (drag, arrow keys, double-click to reset)"
         title="Drag to resize · double-click to reset"
         tabindex="0"
       ></div>
 
       <aside class="stats-col">
-        <div class="stats-head">
-          <h2>Stats for nerds</h2>
-          <div class="stats-actions">
-            <button type="button" id="share-btn" title="Copy a link that loads this stream">Copy link</button>
-            <button type="button" id="export-btn" title="Download stats, tracks, SCTE log and network log as JSON">Export JSON</button>
-          </div>
-        </div>
-        <nav id="tabs" class="tabs" role="tablist"></nav>
         <div id="tab-body" class="tab-body"></div>
       </aside>
     </main>

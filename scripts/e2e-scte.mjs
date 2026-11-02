@@ -96,7 +96,7 @@ try {
 
     // Navigation keys.
     await page.evaluate(() => (document.querySelector('video').currentTime = 0));
-    await page.click('#stream-summary');
+    await page.evaluate(() => document.activeElement?.blur?.());
     const key = async (k) => {
       await page.keyboard.press(k);
       await page.waitForTimeout(250);
@@ -109,7 +109,7 @@ try {
     check('b lands 10 s before the next break', (await key('b')) === 22);
 
     // CSV export.
-    await sub(page, 'Monitor');
+    await sub(page, 'Alerts');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('button:has-text("Export CSV")')]);
     const csv = readFileSync(await download.path(), 'utf8');
     check('CSV export', csv.startsWith('presentation_time_s,') && csv.split('\r\n').length > 8 && /CRC mismatch/.test(csv), download.suggestedFilename());

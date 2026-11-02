@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools) and 1.3.0 (stream health, rendition alignment, picture and sound alarms).
+Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendition alignment, picture and sound alarms) and 1.4.0 (new design with Inspect and Monitor views).
 
 ### Added
 
@@ -19,7 +19,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools) and 1.3.0 (stream health, re
 - **Timeline** of breaks, segmentation (programme, chapter, break, ad, placement opportunity, promo), inserted ads, health issues, quality switches and stalls.
 - **Structure** view (programme → chapter → break → placement opportunity → ad) with decoded UPIDs.
 - **Ad insertion** detection (HLS discontinuities from another origin, DASH periods, HLS Interstitials), matched with breaks, with underfill/overfill.
-- **Monitor** mode: sound and browser notifications for new markers, counts per hour, CSV export.
+- **SCTE-35 alerts**: sound and browser notifications for new markers, counts per hour, CSV export.
 - **SCTE-35 message builder** with presets, output as base64, hex, HLS tags and DASH EventStream.
 - Marker and break navigation: `n` / `p` / `b` / `s` keys, buttons, and a Skip button on the ad-break banner.
 - **SCTE-35 health demo** sample stream with an inserted ad pod and deliberate signalling errors; `npm run test:e2e:scte`.
@@ -27,9 +27,14 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools) and 1.3.0 (stream health, re
 - **Rendition alignment**: fetches the same segments of every video rendition and compares boundaries, media timestamps, durations and keyframes side by side.
 - **Alarms tab**: black and frozen picture, silence, a lost channel, loudness off target, true peaks and out-of-phase stereo, with hold times in content time, an alarm banner on the video, timeline marks, a log with CSV export, sound or browser notification, and adjustable thresholds.
 - **Stream health & alarms demo** sample (`npm run sample:alarms`) and `npm run test:e2e:health`.
+- **New design** for playprobe.xyz: a two-row header (navigation, Copy link, Export, theme; load bar with format chip, DRM and proxy chips, Probe stream), refreshed light and dark themes, card layout.
+- **Inspect view** (default for VOD): summary cards under the player, throughput, a health score, loudness, channels, next ad break with a programme/break strip, and the bitrate ladder (declared vs measured).
+- **Monitor view** (default for live): navigation rail, timeline under the player, health score, playback, loudness and a live events feed.
+- **Inspect | Monitor** switch; the choice is remembered per kind of stream (live/VOD), and Copy link includes the view.
 
 ### Changed
 
+- The "stats for nerds" panel became the side panel of the new layout; the Overview tab is now **Stats**, and the SCTE-35 Monitor sub-view is now **Alerts**.
 - TI UPIDs are shown as a number and MPU UPIDs with their format identifier.
 
 ### Fixed

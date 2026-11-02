@@ -24,6 +24,8 @@ import { PictureSampler } from './alarms/picture';
 import { AlarmsTab, loadAlarmSettings } from './ui/stats/alarms';
 import { STANDARDS } from './audio/loudness';
 import { audioPrefs } from './audio/prefs';
+import { Dashboard } from './ui/dashboard/dashboard';
+import { ViewModeSwitch, defaultView, parseView } from './ui/viewmode';
 
 const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
@@ -48,7 +50,14 @@ adBanner.append(
   h('button', { type: 'button', class: 'skip-break', title: 'Skip to the end of this break (s)', onclick: () => scteNav.skipBreak() }, 'Skip ›'),
 );
 const nerdOverlay = $('#nerd-overlay');
-const summary = $('#stream-summary');
+// The sticky header's height positions the side panel and the Monitor rail.
+const topbar = $('.topbar');
+new ResizeObserver(() => document.documentElement.style.setProperty('--header-h', `${topbar.offsetHeight}px`)).observe(topbar);
+const factsEl = $('#stream-summary');
+const formatChip = $('#format-chip');
+const viewSwitch = new ViewModeSwitch($('#view-toggle'));
+/** A view asked for by the link (?view=), applied once when that stream loads. */
+let linkView = parseView(new URLSearchParams(location.search).get('view'));
 const toast = $('#toast');
 
 function showToast(text: string) {
@@ -87,7 +96,11 @@ function readSettings() {
 }
 for (const el of [proxyModeSel, headersInput, lowLatencyInput, autoplayInput]) el.addEventListener('change', readSettings);
 
-settingsBtn.innerHTML = icons.settings;
+function renderSettingsButton() {
+  settingsBtn.innerHTML = `${icons.settings}<span>Proxy: ${proxyModeSel.value}</span>`;
+}
+renderSettingsButton();
+proxyModeSel.addEventListener('change', renderSettingsButton);
 settingsBtn.addEventListener('click', () => {
   settingsPanel.hidden = !settingsPanel.hidden;
   settingsBtn.setAttribute('aria-expanded', String(!settingsPanel.hidden));
@@ -231,10 +244,28 @@ function renderAlarmBanner() {
   alarmBanner.textContent = active.map((e) => `⚠ ${ALARM_LABELS[e.type].toUpperCase()} ${Math.max(0, Math.round(video.currentTime - e.mediaStart))}s`).join(' · ');
 }
 ctrl.on('tick', renderAlarmBanner);
+const dashboard = new Dashboard(
+  {
+    ctrl,
+    audio,
+    alarms,
+    scteHealth: panel.scteTab.health,
+    streamHealth: panel.healthTab.cache,
+    view: viewSwitch,
+    open: (tab) => panel.show(tab),
+    openMarker: (key) => {
+      panel.show('scte');
+      panel.scteTab.selectKey(key);
+    },
+  },
+  factsEl,
+  $('#stage-extras'),
+);
+panel.addTab({ id: 'dashboard', label: 'Dashboard', view: dashboard, events: ['tick', 'scte', 'stream', 'alarms', 'alignment', 'loaded', 'tracks', 'drm'] }, null);
 const scteBuilder = new BuilderView(showToast);
 const scteAlerts = new ScteAlerts(ctrl);
 const scteMonitor = new MonitorView(ctrl, scteAlerts, panel.scteTab.health, showToast);
-panel.scteTab.addView({ id: 'monitor', label: 'Monitor', el: scteMonitor.el, render: () => scteMonitor.render() });
+panel.scteTab.addView({ id: 'alerts', label: 'Alerts', el: scteMonitor.el, render: () => scteMonitor.render() });
 panel.scteTab.addView({ id: 'builder', label: 'Builder', el: scteBuilder.el, render: () => scteBuilder.render() });
 // Marker and ad-break shortcuts (the player's own keys live in Controls).
 document.addEventListener('keydown', (e) => {
@@ -278,22 +309,6 @@ function renderAdBanner() {
   }
 }
 
-function renderSummary() {
-  if (!ctrl.loadedUrl) {
-    summary.replaceChildren();
-    return;
-  }
-  const s = snapshot(ctrl);
-  summary.replaceChildren(
-    h('span', { class: 'badge accent' }, s.format),
-    h('span', { class: `badge ${s.live ? 'live' : ''}` }, s.live ? 'LIVE' : 'VOD'),
-    s.proxied ? h('span', { class: 'badge' }, 'via proxy') : '',
-    h('span', null, `${s.variants} variants · ${s.audioTracks} audio · ${s.textTracks} subtitles`),
-    h('span', { class: 'mono' }, s.codecs),
-    h('span', null, `SCTE-35 markers: ${ctrl.scte.size}`),
-  );
-}
-
 // DRM-protected frames can't be read back by the page (even Widevine L3),
 // and hardware-secure ones (L1/L2) go through a protected overlay plane.
 // Rounded clipping and backdrop blur over the video need those pixels, and
@@ -307,10 +322,31 @@ ctrl.on('loaded', updateProtectedVideo);
 
 ctrl.on('tick', () => {
   renderOverlay();
-  renderSummary();
+  dashboard.renderStage();
 });
-ctrl.on('scte', renderSummary);
-ctrl.on('tracks', renderSummary);
+ctrl.on('scte', () => dashboard.renderStage());
+ctrl.on('tracks', () => dashboard.renderStage());
+
+// Format chip in the load bar, and the view for this kind of stream.
+ctrl.on('loaded', () => {
+  const loaded = Boolean(ctrl.loadedUrl);
+  formatChip.hidden = !loaded;
+  if (loaded) {
+    const live = ctrl.player.isLive();
+    formatChip.textContent = `${ctrl.player.getManifestType() ?? ''}${live ? ' · LIVE' : ''}`;
+    formatChip.classList.toggle('live', live);
+    viewSwitch.live = live;
+    viewSwitch.set(linkView ?? defaultView(live));
+    linkView = null;
+  } else {
+    viewSwitch.live = null;
+  }
+  dashboard.renderStage();
+});
+viewSwitch.onChange(() => {
+  dashboard.renderStage();
+  if (panel.current === 'dashboard') dashboard.render();
+});
 video.addEventListener('timeupdate', renderAdBanner);
 ctrl.on('scte', renderAdBanner);
 ctrl.on('buffering', (b) => (spinner.hidden = !b));
@@ -354,6 +390,8 @@ async function load(url: string) {
   spinner.hidden = false;
   const params = new URLSearchParams(location.search);
   params.set('url', url);
+  // ?view= only decides the first load from a shared link.
+  if (!linkView) params.delete('view');
   history.replaceState(null, '', `${location.pathname}?${params}`);
   try {
     await ctrl.load({
@@ -394,7 +432,7 @@ $('#load-form').addEventListener('submit', (e) => {
 $('#share-btn').addEventListener('click', async () => {
   const url = ctrl.loadedUrl ?? urlInput.value;
   if (!url) return showToast('Load a stream first');
-  const link = `${location.origin}${location.pathname}?url=${encodeURIComponent(url)}`;
+  const link = `${location.origin}${location.pathname}?url=${encodeURIComponent(url)}&view=${viewSwitch.mode}`;
   try {
     await navigator.clipboard.writeText(link);
     showToast('Link copied');
@@ -408,6 +446,7 @@ $('#export-btn').addEventListener('click', () => {
   const loaded = Boolean(ctrl.loadedUrl);
   const data = {
     exportedAt: new Date().toISOString(),
+    view: viewSwitch.mode,
     app: { name: 'PlayProbe', version: APP_VERSION, releaseDate: RELEASE_DATE || null },
     userAgent: navigator.userAgent,
     snapshot: snapshot(ctrl),

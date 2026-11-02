@@ -30,10 +30,10 @@ const DASH_SAMPLE = `${base}samples/scte-demo/dash.mpd`;
 const HLS_SAMPLE = `${base}samples/scte-demo/master.m3u8`;
 const ANGEL_ONE = 'https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd';
 
-async function open(url, { width = 1480, height = 900 } = {}) {
+async function open(url, { width = 1480, height = 900, view } = {}) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
-  await page.goto(`${base}?url=${encodeURIComponent(url)}`);
+  await page.goto(`${base}?url=${encodeURIComponent(url)}${view ? `&view=${view}` : ''}`);
   await page.waitForFunction(() => window.abrPlayer?.loadedUrl, null, { timeout: 30000 });
   return page;
 }
@@ -45,6 +45,34 @@ const shot = async (page, name) => {
   console.log(`  ✓ ${name}`);
 };
 const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200 } });
+
+const play = (page, rate = 1) =>
+  page.evaluate(async (r) => {
+    const v = window.abrPlayer.video;
+    v.muted = true;
+    v.playbackRate = r;
+    await v.play().catch(() => undefined);
+  }, rate);
+
+// 0. The two views: Inspect (DASH sample) and Monitor (alarms demo).
+{
+  const page = await open(DASH_SAMPLE);
+  await play(page, 2);
+  await page.waitForTimeout(9500);
+  await tab(page, 'Dashboard');
+  await page.waitForTimeout(500);
+  await shot(page, 'inspect.png');
+  await page.close();
+}
+{
+  const page = await open(`${base}samples/alarms-demo/master.m3u8`, { view: 'monitor' });
+  await play(page, 2);
+  await page.waitForTimeout(6500);
+  await tab(page, 'Dashboard');
+  await page.waitForTimeout(500);
+  await shot(page, 'monitor.png');
+  await page.close();
+}
 
 // 1. SCTE-35 view during an ad break (DASH sample).
 {
@@ -90,7 +118,7 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   }
   await page.waitForTimeout(9000);
   await page.keyboard.press('i');
-  await tab(page, 'Overview');
+  await tab(page, 'Stats');
   await showControls(page);
   await page.waitForTimeout(600);
   await shot(page, 'overview.png');
@@ -139,7 +167,9 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await seek(page, 19);
   await page.waitForTimeout(3000);
   await page.click('#theme-btn'); // System -> Light
-  await tab(page, 'SCTE-35');
+  await play(page);
+  await page.waitForTimeout(2500);
+  await tab(page, 'Dashboard');
   await showControls(page);
   await page.waitForTimeout(600);
   await shot(page, 'light.png');
@@ -152,7 +182,7 @@ const showControls = (page) => page.hover('#video', { position: { x: 200, y: 200
   await page.waitForTimeout(1500);
   await seek(page, 7);
   await page.waitForTimeout(1500);
-  await tab(page, 'SCTE-35');
+  await tab(page, 'Dashboard');
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outDir, 'mobile.png'), fullPage: false });
   console.log('  ✓ mobile.png');

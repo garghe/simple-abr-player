@@ -4,11 +4,11 @@
 
 <h1 align="center">PlayProbe</h1>
 
-<p align="center"><strong>Play and inspect streams:</strong> DASH · HLS · DRM · SCTE-35</p>
+<p align="center"><strong>Play, inspect and monitor streams:</strong> DASH · HLS · DRM · SCTE-35 · <a href="https://playprobe.xyz">playprobe.xyz</a></p>
 
-**PlayProbe** is a web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine**, **PlayReady** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and adds a **"stats for nerds"** panel showing stream properties, live network and buffer behaviour, the raw manifests, DRM and license details, audio levels and loudness, device capabilities and **SCTE-35 ad markers**, decoded field by field.
+**PlayProbe** is a web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine**, **PlayReady** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and checks it as it goes: stream health and rendition alignment, **SCTE-35 ad markers** decoded field by field, loudness and picture/sound alarms, DRM licence exchanges, network and buffer behaviour, the raw manifests and device capabilities. Two views: **Inspect**, a summary of the stream, and **Monitor**, for watching a live channel.
 
-![SCTE-35 view during an ad break](docs/screenshots/scte-dash.png)
+![Inspect view](docs/screenshots/inspect.png)
 
 ---
 
@@ -19,6 +19,7 @@
 - [Playing HTTPS streams locally (CORS proxy)](#playing-https-streams-locally-cors-proxy)
 - [Build and run in production](#build-and-run-in-production)
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
+- [Inspect and Monitor views](#inspect-and-monitor-views)
 - [Screenshots](#screenshots)
 - [Stream health and rendition alignment](#stream-health-and-rendition-alignment)
 - [Picture and sound alarms](#picture-and-sound-alarms)
@@ -44,12 +45,13 @@
 | --- | --- |
 | **Load a stream** | Paste any `.mpd` or `.m3u8` URL, or pick a test stream (bundled offline sample, public VOD, live). Recent URLs are remembered, and a `?url=` link opens the app with that stream loaded. |
 | **Player controls** | Play/pause, a seek bar showing what's buffered and where the SCTE markers are, volume and mute, **audio track**, **subtitles**, **quality** (Auto or a fixed rendition), playback speed, picture-in-picture, fullscreen, and a jump-to-live button for live streams. |
-| **Stats: Overview** | Format, live or VOD, latency, how far back you can rewind (live), wall-clock playhead, current rendition, codecs, frame rate, SDR or HDR, stream bitrate and estimated bandwidth, buffer, dropped frames, stalls, startup timings. Plus a live graph of bandwidth and buffer. |
+| **Inspect and Monitor views** | **Inspect** (default for VOD): the player with summary cards (format, video, audio, DRM, SCTE-35), throughput, a **health score**, loudness, channels, the next ad break and the **bitrate ladder**. **Monitor** (default for live): a navigation rail, the player with the **timeline** under it, and health, playback, loudness and a live **events feed**. Switch with **Inspect \| Monitor**; see [the views](#inspect-and-monitor-views). |
+| **Stats** | Format, live or VOD, latency, how far back you can rewind (live), wall-clock playhead, current rendition, codecs, frame rate, SDR or HDR, stream bitrate and estimated bandwidth, buffer, dropped frames, stalls, startup timings. Plus a live graph of bandwidth and buffer. |
 | **Stats: Tracks** | Every video rendition, audio track (language, roles, codec, channels, sample rate), subtitle/caption track, thumbnail track and quality option, with the active ones highlighted. |
 | **Audio meters** | Per-channel level meters on the video (stereo or 5.1), with short-term loudness. On by default; toggle with the **Meters** button or `a`. |
 | **Stats: Audio** | Large per-channel peak meters with peak hold, loudness to **EBU R128** (−23 LUFS) or **ATSC A/85** (−24 LKFS) — momentary, short-term, integrated, true peak, loudness range — and L/R phase correlation. Also compares the channels the manifest declares with the channels actually decoded. |
 | **Stats: SCTE-35** | Every ad marker the app finds, with time, source, OUT/IN direction, a decoded summary and duration. Click a marker to see its full decoded contents, CRC check and **splice timing** (lead time, segment alignment, `splice_time`). Also shows whether you're **in an ad break right now** (with countdown), and includes a **manual decoder** for pasted base64 or hex messages. |
-| **SCTE-35 tools** | **Health** checks that list what's wrong with the signalling (unpaired OUT/IN and segmentation signals, wrong durations, CRC errors, markers missing from some playlists, short lead times, splices off segment boundaries). A **Timeline** with one lane per signal type plus quality switches and stalls, the **Structure** (programme → chapter → break → ad), **Ad insertion** (server-side inserted ads and HLS Interstitials matched with their breaks, with underfill/overfill), a **Monitor** mode (sound or browser notification on new markers, counts per hour, CSV export), a message **Builder**, and break navigation (`n` / `p` / `b` / `s`). See [SCTE-35 tools](#scte-35-tools). |
+| **SCTE-35 tools** | **Health** checks that list what's wrong with the signalling (unpaired OUT/IN and segmentation signals, wrong durations, CRC errors, markers missing from some playlists, short lead times, splices off segment boundaries). A **Timeline** with one lane per signal type plus quality switches and stalls, the **Structure** (programme → chapter → break → ad), **Ad insertion** (server-side inserted ads and HLS Interstitials matched with their breaks, with underfill/overfill), **Alerts** (sound or browser notification on new markers, counts per hour, CSV export), a message **Builder**, and break navigation (`n` / `p` / `b` / `s`). See [SCTE-35 tools](#scte-35-tools). |
 | **Stats: Network** | Every manifest, playlist and segment request: status, size, time, throughput, errors, and whether it went through the proxy. |
 | **Stats: Manifest** | The raw MPD and every HLS playlist exactly as fetched (refreshes for live streams), with SCTE and ad-related lines highlighted. |
 | **DRM** | **Widevine** (Chrome, Edge, Firefox, Android), **PlayReady** (Edge on Windows, Smart TVs, Xbox) and **FairPlay** (Safari). Works with any license server: license URL, request headers and, if needed, generic request/response formats, with no provider-specific settings. Saved profiles. License requests can go through the CORS proxy. |
@@ -59,7 +61,7 @@
 | **Stats: Alarms** | **Picture and sound alarms**: black, frozen picture, silence, a lost channel, loudness off target, true peaks and out-of-phase stereo, with an alarm banner on the video, a log, CSV export, sound or browser notification, and adjustable thresholds. See [Alarms](#picture-and-sound-alarms). |
 | **Stats: Log** | Loading steps, quality switches, track changes, stalls and errors. |
 | **Light / dark theme** | The header button cycles **System** (follows your OS setting), **Light** and **Dark**. The choice is remembered. The video area stays dark in both themes, as video players normally do. |
-| **Resizable layout** | Drag the handle between the player and the stats panel: drag left for a wider stats panel and a smaller player, right for the opposite. The width is remembered. Double-click the handle to reset; with the handle focused, arrow keys also resize it. |
+| **Resizable layout** | Drag the handle between the player and the side panel: drag left for a wider stats panel and a smaller player, right for the opposite. The width is remembered. Double-click the handle to reset; with the handle focused, arrow keys also resize it. |
 | **Stats overlay** | A compact YouTube-style "stats for nerds" box on top of the video (press `i`). |
 | **Export** | Downloads a JSON file with the stats, tracks, SCTE log, network log and event log, useful to attach to a bug report. |
 | **CORS proxy** | Built into the local dev and preview servers, so plain HTTPS streams play even when their server doesn't allow browser access (see below). |
@@ -221,6 +223,27 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 
 ---
 
+## Inspect and Monitor views
+
+The header holds the logo with the version, the navigation, **Copy link**, **Export** and the theme; under it, the load bar: format chip, URL, test streams, DRM, proxy settings, **Probe stream** and the **Inspect | Monitor** switch.
+
+| | Inspect | Monitor |
+| --- | --- | --- |
+| **For** | Checking a stream: a new channel, a delivery, a support ticket, a report | Watching a live channel, e.g. in an operations room |
+| **Default** | VOD streams | Live streams |
+| **Navigation** | Pills in the header | A rail on the left (icons + labels) |
+| **Under the player** | Summary cards (click one for its tab) and throughput & buffer | The timeline: breaks, programme and ad segmentation, inserted ads, quality, health issues, stalls and alarms |
+| **Dashboard** | Health score, loudness, channels, next ad break with a programme/break strip, bitrate ladder (declared and measured) | Health score, playback, loudness against the target, events feed (SCTE-35 markers, alarms, quality switches, warnings) |
+
+- **Health score:** 100 minus points for problems in each area: stream & segments, rendition alignment, SCTE-35 signalling, picture & sound (active alarms weigh most) and DRM. Errors cost 10, warnings 4, capped per area. Each line opens its tab.
+- **Choosing the view:** live streams open in Monitor, VOD in Inspect. Switching while a stream plays remembers the choice for that kind of stream (e.g. always Inspect for live). **Copy link** includes the view (`&view=monitor`), so a shared link opens the same way.
+- **Detail tabs:** Stats, Tracks, Audio, DRM, SCTE-35, Health, Alarms, Network, Manifest, Device and Log replace the dashboard in the side panel; the player keeps playing. Both views work in the light and dark themes and on phones (everything stacks in one column).
+
+**Monitor view (stream health & alarms demo, light theme)**
+![Monitor view](docs/screenshots/monitor.png)
+
+---
+
 ## Screenshots
 
 > Captured with `npm run screenshots` in **headless Chromium**. That browser has no H.264/AAC codecs and no DRM, which is why the Device tab shows them as unsupported. In regular Chrome, Edge or Safari they show as supported.
@@ -282,10 +305,10 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 **Settings and Log**: CORS proxy mode, custom headers, low-latency mode.
 ![Settings](docs/screenshots/settings.png)
 
-**Light theme**: the same view with the theme button set to Light.
+**Light theme**: the Inspect dashboard with the theme button set to Light.
 ![Light theme](docs/screenshots/light.png)
 
-**Phone layout**: controls sit under the video; the stats panel stacks below.
+**Phone layout**: navigation scrolls in the header, controls sit under the video, the summary cards and dashboard stack below.
 
 <img src="docs/screenshots/mobile.png" alt="Phone layout" width="390">
 
@@ -362,7 +385,7 @@ The SCTE-35 tab has a break status line, navigation buttons, and these views:
 | **Timeline** | Lanes for OUT → IN breaks and each segmentation family (programme, chapter, break, advertisement, placement opportunity, promo/credits), inserted ads, health issues, quality switches, stalls and errors. Zoom: all, 10 min, 2 min, 30 s around the playhead. Click to seek. |
 | **Structure** | Segmentation signals nested by time: programme → chapter → break → placement opportunity → advertisement, with UPIDs decoded (Ad-ID, ADI, EIDR, TI as a number, MPU format identifier, UUID, URI, MID). |
 | **Ad insertion** | Inserted ad pods and HLS Interstitials, each matched with the SCTE OUT that started its break, with the break length and how well the pod fills it. |
-| **Monitor** | For leaving a live channel running: a sound and/or a browser notification for each new marker (optionally OUT/IN only), marker counts per hour, and **Export CSV** (one row per marker with timing and issues). |
+| **Alerts** | For leaving a live channel running: a sound and/or a browser notification for each new marker (optionally OUT/IN only), marker counts per hour, and **Export CSV** (one row per marker with timing and issues). |
 | **Builder** | Compose `splice_insert`, `time_signal` or `splice_null` with segmentation descriptors (type, duration, UPID, segment numbers, delivery restrictions), from scratch or from a preset, and copy it as base64, hex, HLS tags (`EXT-X-DATERANGE`, `CUE-OUT`/`CUE-IN`, `EXT-OATCLS-SCTE35`, `EXT-X-SCTE35`) or a DASH `EventStream`. The output is decoded back to check it. |
 
 **Navigation:** `n` / `p` jump to the next / previous marker, `b` to a few seconds before the next break (3–30 s, chosen next to the buttons), `s` skips the current break. The ad-break banner on the video also has a **Skip** button.
@@ -559,6 +582,7 @@ flowchart LR
 | `src/ui/controls.ts`, `seekbar.ts` | Control bar, track selectors, keyboard shortcuts, and the seek bar with buffered regions and SCTE markers and breaks. |
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
+| `src/ui/dashboard/*`, `src/ui/viewmode.ts` | The Inspect and Monitor dashboards (cards, timeline under the player, facts), their data (health score, events feed, bitrate ladder) as pure functions, and the view switch with its remembered defaults. |
 | `src/ui/theme.ts` | System / Light / Dark toggle. Colours are CSS custom properties switched by `data-theme` on `<html>` (or the OS setting in System mode); a small inline script in `index.html` applies the saved theme before the page first appears. |
 | `src/drm/settings.ts` | DRM settings model (generic: URLs, headers, formats), Widevine and PlayReady security levels, profiles and storage. |
 | `src/drm/transform.ts` | Generic license request wrapping (raw / base64 / form / JSON template) and response unwrapping (auto-detect / base64 / `<ckc>` / JSON field), FairPlay content ID. |
@@ -623,7 +647,8 @@ sequenceDiagram
 │   ├── media/                 Segment reader (fMP4 init and fragments, MPEG-2 TS)
 │   ├── stream/                Stream health checks, MPD timelines, rendition alignment
 │   ├── alarms/                Picture and sound alarms, picture sampler
-│   ├── ui/                    Controls, seek bar, chart, helpers
+│   ├── ui/                    Controls, seek bar, chart, view switch, helpers
+│   │   ├── dashboard/         Inspect and Monitor dashboards, health score, events feed, bitrate ladder
 │   │   ├── scte/              SCTE-35 views: health, timeline, structure, ad insertion, monitor, builder
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
 │   ├── presets.ts             Test stream list
