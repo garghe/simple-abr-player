@@ -101,7 +101,7 @@ export class TimelineView {
       ...(pods.length ? [{ id: 'pods', label: 'Inserted ads' }] : []),
       { id: 'issues', label: 'Health issues' },
       { id: 'quality', label: 'Quality' },
-      { id: 'playback', label: 'Stalls & errors' },
+      { id: 'playback', label: 'Stalls, errors, alarms' },
     ];
     const rowY = new Map(lanes.map((l, i) => [l.id, i * ROW_H]));
     const height = lanes.length * ROW_H + AXIS_H;

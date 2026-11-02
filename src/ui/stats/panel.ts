@@ -34,8 +34,8 @@ export class StatsPanel {
   private pending = false;
 
   constructor(
-    ctrl: PlayerController,
-    nav: HTMLElement,
+    private readonly ctrl: PlayerController,
+    private readonly nav: HTMLElement,
     private readonly body: HTMLElement,
     audio: AudioEngine,
     drmActions: DrmActions,
@@ -92,6 +92,30 @@ export class StatsPanel {
     }
     this.body.replaceChildren(tab.view.el);
     tab.view.render();
+    this.renderCounts();
+  }
+
+  /** Adds a tab created outside the panel (e.g. Alarms, which needs the audio engine). */
+  addTab(tab: Tab, afterId?: string) {
+    const i = afterId ? this.tabs.findIndex((t) => t.id === afterId) : -1;
+    this.tabs.splice(i >= 0 ? i + 1 : this.tabs.length, 0, tab);
+    const btn = h('button', { type: 'button', role: 'tab', class: 'tab', onclick: () => this.show(tab.id) }, tab.label);
+    this.buttons.set(tab.id, btn);
+    const after = afterId ? this.buttons.get(afterId) : undefined;
+    if (after) after.after(btn);
+    else this.nav.append(btn);
+    for (const name of tab.events) {
+      this.ctrl.on(name, () => {
+        if (this.active === tab) this.schedule();
+        this.renderCounts();
+      });
+    }
+    // A saved tab choice may point at this tab.
+    try {
+      if (localStorage.getItem(TAB_KEY) === tab.id) this.show(tab.id);
+    } catch {
+      /* storage unavailable */
+    }
     this.renderCounts();
   }
 

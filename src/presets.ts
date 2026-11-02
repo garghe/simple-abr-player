@@ -38,6 +38,12 @@ export function presets(): Preset[] {
       url: local('samples/scte-issues/master.m3u8'),
       notes: 'Underfilled ad pod, wrong CUE-OUT-CONT, late end signal, a marker missing from 240p, an OUT with no IN and a broken CRC',
     },
+    {
+      group: 'Bundled sample (offline)',
+      name: 'Stream health & alarms demo — HLS with picture, sound and stream problems',
+      url: local('samples/alarms-demo/master.m3u8'),
+      notes: 'Black, frozen picture, silence, a lost channel, loudness and peaks, out of phase; misaligned 180p rendition, wrong CODECS and BANDWIDTH',
+    },
     { group: 'VOD', name: 'Angel One — DASH, multi-audio + subtitles (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd' },
     { group: 'VOD', name: 'Angel One — HLS (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8' },
     { group: 'VOD', name: 'Sintel — DASH MP4 (Shaka)', url: 'https://storage.googleapis.com/shaka-demo-assets/sintel-mp4-only/dash.mpd' },

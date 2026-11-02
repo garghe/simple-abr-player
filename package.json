@@ -1,6 +1,6 @@
 {
   "name": "playprobe",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "releaseDate": "",
   "private": true,
   "description": "PlayProbe: play and inspect MPEG-DASH and HLS streams, with DRM (Widevine, FairPlay), SCTE-35, audio loudness and stats for nerds",
@@ -17,7 +17,8 @@
     "deploy": "npm run build && wrangler deploy",
     "test:e2e:drm": "node scripts/e2e-drm.mjs",
     "sample:issues": "node scripts/make-issues-sample.mjs",
-    "test:e2e:scte": "node scripts/e2e-scte.mjs"
+    "test:e2e:scte": "node scripts/e2e-scte.mjs",
+    "sample:alarms": "node scripts/make-alarms-sample.mjs"
   },
   "dependencies": {
     "shaka-player": "^5.2.13"

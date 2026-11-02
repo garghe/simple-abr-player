@@ -19,6 +19,11 @@ import { formatBitrate, formatTime } from './ui/format';
 import { icons } from './ui/icons';
 import { installSplitter } from './ui/splitter';
 import { installThemeToggle } from './ui/theme';
+import { ALARM_LABELS, AlarmMonitor } from './alarms/monitor';
+import { PictureSampler } from './alarms/picture';
+import { AlarmsTab, loadAlarmSettings } from './ui/stats/alarms';
+import { STANDARDS } from './audio/loudness';
+import { audioPrefs } from './audio/prefs';
 
 const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
@@ -36,6 +41,7 @@ const autoplayInput = $('#autoplay') as HTMLInputElement;
 const message = $('#player-message');
 const spinner = $('#spinner');
 const adBanner = $('#ad-banner');
+const alarmBanner = $('#alarm-banner');
 const adBannerText = h('span');
 adBanner.append(
   adBannerText,
@@ -197,6 +203,34 @@ const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, {
 });
 const scteNav = new ScteNavigator(ctrl, showToast);
 panel.scteTab.setNavigation(scteNav.toolbar());
+// Picture and sound alarms (confidence monitoring).
+const alarms = new AlarmMonitor();
+alarms.settings = loadAlarmSettings();
+const pictureSampler = new PictureSampler(video, alarms, () => ctrl.activeDrm() !== null);
+pictureSampler.start();
+audio.on('levels', () => {
+  const std = STANDARDS[audioPrefs.standard];
+  alarms.audio(video.paused || !ctrl.loadedUrl ? null : audio.reading, Date.now(), video.currentTime, std.target, std.maxTruePeak);
+});
+alarms.onAlarm((e, raised) => {
+  if (raised) ctrl.addMark('alarm', `${ALARM_LABELS[e.type]}: ${e.detail}`, e.mediaStart);
+  ctrl.dispatchEvent(new CustomEvent('alarms'));
+  renderAlarmBanner();
+});
+const resetAlarms = () => {
+  alarms.reset();
+  pictureSampler.reset();
+  renderAlarmBanner();
+};
+ctrl.on('reset', resetAlarms);
+const alarmsTab = new AlarmsTab(ctrl, alarms, pictureSampler, showToast);
+panel.addTab({ id: 'alarms', label: 'Alarms', view: alarmsTab, events: ['alarms', 'tick', 'loaded'], count: () => alarms.active.size }, 'health');
+function renderAlarmBanner() {
+  const active = [...alarms.active.values()];
+  alarmBanner.hidden = !active.length || !ctrl.loadedUrl;
+  alarmBanner.textContent = active.map((e) => `⚠ ${ALARM_LABELS[e.type].toUpperCase()} ${Math.max(0, Math.round(video.currentTime - e.mediaStart))}s`).join(' · ');
+}
+ctrl.on('tick', renderAlarmBanner);
 const scteBuilder = new BuilderView(showToast);
 const scteAlerts = new ScteAlerts(ctrl);
 const scteMonitor = new MonitorView(ctrl, scteAlerts, panel.scteTab.health, showToast);
@@ -382,6 +416,9 @@ $('#export-btn').addEventListener('click', () => {
     audioTracks: loaded ? p.getAudioTracks() : [],
     textTracks: loaded ? p.getTextTracks() : [],
     scte35: ctrl.scte.list().map(({ hls: _hls, ...e }) => e),
+    alarms: alarms.log,
+    streamHealth: ctrl.streamHealth(),
+    renditionAlignment: ctrl.alignment ? { ...ctrl.alignment, rows: ctrl.alignment.rows.map((r) => ({ ...r })) } : null,
     // DRM: what was used and what happened, but never settings, headers or bodies.
     drm: {
       active: ctrl.activeDrm(),

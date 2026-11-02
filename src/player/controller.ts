@@ -100,7 +100,7 @@ export interface NetworkEntry {
 /** Playback events placed on the SCTE timeline (media time). */
 export interface PlaybackMark {
   time: number;
-  kind: 'quality' | 'stall' | 'gap' | 'error';
+  kind: 'quality' | 'stall' | 'gap' | 'error' | 'alarm';
   label: string;
   /** Stalls: seconds spent waiting. */
   duration?: number;
@@ -952,6 +952,12 @@ export class PlayerController extends EventTarget {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  /** Adds an event to the timeline's playback lanes (used by the picture/sound alarms). */
+  addMark(kind: PlaybackMark['kind'], label: string, time: number, duration?: number) {
+    this.mark(kind, label, time, duration);
+    this.emit('marks');
+  }
 
   private mark(kind: PlaybackMark['kind'], label: string, time = this.video.currentTime, duration?: number) {
     if (!this.loadedUrl && kind !== 'error') return;

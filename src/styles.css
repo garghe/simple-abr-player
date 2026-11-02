@@ -1919,7 +1919,8 @@ ul.issues li {
 
 .timeline-svg .mark.stall,
 .timeline-svg .mark.error,
-.timeline-svg .mark.gap {
+.timeline-svg .mark.gap,
+.timeline-svg .mark.alarm {
   fill: var(--danger);
 }
 
@@ -2107,4 +2108,57 @@ ul.issues li {
 
 .align-cell.bad {
   background: var(--danger-bg);
+}
+
+/* ---- Alarms ---- */
+.alarm-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.alarm-tile {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border-left: 4px solid var(--ok);
+}
+
+.alarm-tile.alarm-on {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.alarm-tile.alarm-na {
+  border-left-color: var(--muted);
+}
+
+.alarm-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.alarm-state {
+  margin-bottom: 4px;
+}
+
+.alarm-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.alarm-banner[hidden] {
+  display: none;
 }
