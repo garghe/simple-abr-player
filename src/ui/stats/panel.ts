@@ -94,7 +94,7 @@ export class StatsPanel {
   }
 
   private button(tab: Tab): HTMLButtonElement {
-    const btn = h('button', { type: 'button', role: 'tab', class: 'tab', title: tab.label, onclick: () => this.show(tab.id) });
+    const btn = h('button', { type: 'button', role: 'tab', class: 'tab', onclick: () => this.show(tab.id) });
     btn.dataset.tab = tab.id;
     btn.innerHTML = TAB_ICONS[tab.id] ?? TAB_ICONS.overview;
     btn.append(h('span', { class: 'tab-label' }, tab.label), h('span', { class: 'count', hidden: true }));

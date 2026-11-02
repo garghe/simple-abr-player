@@ -53,6 +53,7 @@ export function installTooltips(root: HTMLElement = document.body): void {
 
   let target: Element | null = null;
   let timer = 0;
+  let pointer: { x: number; y: number } | null = null;
 
   const find = (node: EventTarget | null): [Element, string] | null => {
     let el = node instanceof Element ? node.closest(SELECTOR) : null;
@@ -93,10 +94,22 @@ export function installTooltips(root: HTMLElement = document.body): void {
     tip.classList.toggle('below', below);
   };
 
+  /**
+   * Cards and tabs redraw every second, replacing the element under the mouse.
+   * When the tooltip's element is replaced by one with the same explanation,
+   * move the tooltip over to it instead of hiding and showing it again.
+   */
+  const adopt = (hit: [Element, string] | null): boolean => {
+    if (!hit || tip.hidden || !target || target.isConnected || hit[1] !== tip.textContent) return false;
+    target = hit[0];
+    target.setAttribute('aria-describedby', tip.id);
+    return true;
+  };
+
   const schedule = (node: EventTarget | null, delay: number) => {
     const hit = find(node);
     if (!hit) return hide();
-    if (hit[0] === target) return;
+    if (hit[0] === target || adopt(hit)) return;
     hide();
     timer = window.setTimeout(() => {
       if (hit[0].isConnected) show(hit[0], hit[1]);
@@ -104,7 +117,11 @@ export function installTooltips(root: HTMLElement = document.body): void {
   };
 
   root.addEventListener('mouseover', (e) => schedule(e.target, 350));
-  root.addEventListener('mouseleave', hide);
+  root.addEventListener('mousemove', (e) => (pointer = { x: e.clientX, y: e.clientY }), { passive: true });
+  root.addEventListener('mouseleave', () => {
+    pointer = null;
+    hide();
+  });
   root.addEventListener('focusin', (e) => {
     // Only keyboard focus: a mouse click on a button shouldn't pop a tooltip.
     if ((e.target as Element).matches(':focus-visible')) schedule(e.target, 0);
@@ -121,5 +138,9 @@ export function installTooltips(root: HTMLElement = document.body): void {
   window.addEventListener('scroll', hide, true);
   window.addEventListener('resize', hide);
   // Tabs re-render often; drop the tooltip when its element goes away.
-  new MutationObserver(() => target && !target.isConnected && hide()).observe(root, { childList: true, subtree: true });
+  new MutationObserver(() => {
+    if (!target || target.isConnected) return;
+    const under = pointer ? document.elementFromPoint(pointer.x, pointer.y) : null;
+    if (!adopt(find(under))) hide();
+  }).observe(root, { childList: true, subtree: true });
 }

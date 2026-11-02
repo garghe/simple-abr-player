@@ -42,6 +42,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 ### Fixed
 
 - The active item in the Monitor navigation rail no longer crowds its label.
+- Tooltips no longer blink while the dashboard refreshes, and tab names show their explanation instead of repeating the name.
 - License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.
 
 ## [1.0.0] - 2026-10-31
