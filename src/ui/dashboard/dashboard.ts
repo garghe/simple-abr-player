@@ -13,7 +13,7 @@ import { TimelineView } from '../scte/timeline';
 import { snapshot } from '../stats/overview';
 import type { StreamHealthCache } from '../stats/health';
 import type { ViewModeSwitch } from '../viewmode';
-import { buildFeed, buildLadder, healthScore, type FeedItem, type ScorePart } from './model';
+import { buildFeed, buildLadder, channelStates, healthScore, type FeedItem, type ScorePart } from './model';
 
 export interface DashboardDeps {
   ctrl: PlayerController;
@@ -41,7 +41,8 @@ const FEED_COLOR: Record<FeedItem['kind'], string> = {
 };
 
 const pct = (dbfs: number) => Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
-const fmtLu = (v: number) => (Number.isFinite(v) && v > -70 ? v.toFixed(1).replace('-', '−') : v <= -70 ? 'silence' : '—');
+// −∞ means not measured yet (e.g. the first 3 s of short-term); very low values are silence.
+const fmtLu = (v: number) => (!Number.isFinite(v) ? '—' : v <= -70 ? 'silence' : v.toFixed(1).replace('-', '−'));
 
 /**
  * The dashboard: Inspect (summary cards) or Monitor (live operations). The
@@ -77,8 +78,14 @@ export class Dashboard {
     this.el.replaceChildren(
       ...(monitor
         ? [this.scoreCard(true), this.playbackCard(), this.loudnessCard(true), this.feedCard()]
-        : [h('div', { class: 'bento' }, this.scoreCard(false), this.loudnessCard(false), this.channelsCard(), this.breakCard(), this.ladderCard())]),
+        : [h('div', { class: 'bento' }, ...this.inspectCards())]),
     );
+  }
+
+  private inspectCards(): HTMLElement[] {
+    // The DRM card sits next to loudness for protected streams; otherwise loudness takes the row.
+    const drm = this.drmCard();
+    return [this.scoreCard(false), this.loudnessCard(!drm), ...(drm ? [drm] : []), this.breakCard(), this.ladderCard()];
   }
 
   private emptyCard(): HTMLElement {
@@ -171,6 +178,7 @@ export class Dashboard {
         ),
         h('div', { class: 'loud-ticks mono' }, h('span', null, '−40'), h('span', null, '−30'), h('span', null, '−20'), h('span', null, '−10'), h('span', null, '0')),
         h('div', { class: 'muted small' }, `Integrated ${fmtLu(r.integrated)} · true peak ${fmtLu(r.truePeakMax)} dBTP · LRA ${fmtLu(r.lra)} LU`),
+        this.channelStrip(r.channels),
       );
       return card;
     }
@@ -189,25 +197,61 @@ export class Dashboard {
           h('div', { class: 'small' }, `TP ${fmtLu(r.truePeakMax)} dBTP `, badge(status[0], status[1])),
         ),
       ),
+      this.channelStrip(r.channels),
     );
     return card;
   }
 
-  private channelsCard(): HTMLElement {
-    const r = this.d.audio.lastReading;
-    const card = h('div', { class: 'card dash-card' }, h('h4', null, 'Channels', h('span', { class: 'muted' }, r?.channels.length ? (r.channels.length === 6 ? '5.1' : `${r.channels.length} ch`) : '')));
-    if (!r?.channels.length) {
-      card.append(h('p', { class: 'muted small' }, 'No audio measured yet.'));
-      return card;
-    }
-    card.append(
-      h(
-        'div',
-        { class: 'ch-bars' },
-        r.channels.map((c) => h('div', { title: `${c.label}: ${fmtLu(c.peak)} dBFS` }, h('i', { style: `height:${pct(c.peak)}%` }), h('span', null, c.label))),
+  /** One thin meter per channel with its level; lost or unbalanced channels stand out. */
+  private channelStrip(channels: { label: string; peak: number; rms: number }[]): HTMLElement {
+    const states = channelStates(channels, this.d.alarms.settings.silenceLevel);
+    const flagged = states.filter((c) => c.flag);
+    return h(
+      'div',
+      { class: 'ch-strip' },
+      h('div', { class: 'ch-head muted small' }, channels.length === 6 ? '5.1' : `${channels.length} ch`, flagged.length ? badge(flagged.map((c) => `${c.label} ${c.flag}`).join(' · '), 'warn') : ''),
+      states.map((c) =>
+        h(
+          'div',
+          { class: `ch-row${c.flag ? ` ${c.flag}` : ''}`, title: `${c.label}: ${fmtLu(c.peak)} dBFS peak` },
+          h('span', { class: 'ch-l' }, c.label),
+          h('span', { class: 'ch-m' }, h('i', { style: `width:${pct(c.peak)}%` })),
+          h('span', { class: 'ch-v mono' }, Number.isFinite(c.peak) && c.peak > -90 ? Math.round(c.peak).toString().replace('-', '−') : '−∞'),
+        ),
       ),
     );
-    return card;
+  }
+
+  /** Protected streams: DRM system, security level, licence and key status. Null for clear streams. */
+  private drmCard(): HTMLElement | null {
+    const ctrl = this.d.ctrl;
+    const active = ctrl.activeDrm();
+    const licences = ctrl.drm.exchanges.filter((x) => x.kind === 'license');
+    if (!active && !licences.length) return null;
+    const last = licences[licences.length - 1];
+    const keys = Object.values(ctrl.drm.keyStatuses);
+    const usable = keys.filter((k) => k === 'usable').length;
+    const exp = ctrl.drm.expiration;
+    const hours = Number.isFinite(exp) && exp > 0 ? (exp - Date.now()) / 3_600_000 : null;
+    const level = active?.videoRobustness ? active.videoRobustness.replace(/^HW_SECURE_ALL$/, 'L1 (hardware)').replace(/^HW_.*$/, 'L2').replace(/^SW_SECURE.*$/, 'L3 (software)').replace(/^3000$/, 'SL3000').replace(/^2000$/, 'SL2000') : '';
+    const row = (k: string, v: HTMLElement | string) => h('li', null, h('span', { class: 'muted' }, k), v);
+    return h(
+      'div',
+      { class: 'card dash-card drm-card' },
+      h('h4', null, 'DRM', h('button', { type: 'button', class: 'linklike small', onclick: () => this.d.open('drm') }, 'details')),
+      h('div', { class: 'drm-name' }, active?.name ?? 'Not started', level ? h('span', { class: 'muted small' }, ` ${level}`) : ''),
+      h(
+        'ul',
+        { class: 'drm-facts' },
+        row('Scheme', active?.scheme || '—'),
+        row('Keys', keys.length ? badge(`${usable} / ${keys.length} usable`, usable === keys.length ? 'ok' : 'warn') : '—'),
+        row('Licence', hours === null ? (last && !last.error ? 'no expiry' : '—') : hours < 1 ? badge('expires < 1 h', 'out') : `${Math.round(hours)} h left`),
+        row(
+          'Request',
+          last ? (last.pending ? 'waiting…' : last.error ? badge(last.status ? `HTTP ${last.status}` : 'failed', 'warn') : badge(`HTTP ${last.status ?? 200}${last.ms !== null ? ` · ${Math.round(last.ms)} ms` : ''}`, 'ok')) : '—',
+        ),
+      ),
+    );
   }
 
   private breakCard(): HTMLElement {

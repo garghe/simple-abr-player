@@ -162,3 +162,25 @@ export function buildLadder(
   }
   return [...byVideo.values()].sort((a, b) => a.declared - b.declared);
 }
+
+export interface ChannelState {
+  label: string;
+  peak: number;
+  /** silent: below the silence level while others play; low: far below the loudest (not LFE). */
+  flag: 'silent' | 'low' | null;
+}
+
+/** Flags channels that look lost or out of balance (LFE is never flagged). */
+export function channelStates(channels: { label: string; peak: number; rms: number }[], silence = -60, lowBy = 10): ChannelState[] {
+  const main = channels.filter((c) => c.label !== 'LFE');
+  const loud = main.some((c) => c.rms > -40);
+  const maxPeak = Math.max(-Infinity, ...main.map((c) => c.peak));
+  return channels.map((c) => {
+    let flag: ChannelState['flag'] = null;
+    if (c.label !== 'LFE' && loud && main.length > 1) {
+      if (c.peak < silence) flag = 'silent';
+      else if (c.peak < maxPeak - lowBy) flag = 'low';
+    }
+    return { label: c.label, peak: c.peak, flag };
+  });
+}

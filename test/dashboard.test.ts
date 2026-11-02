@@ -80,3 +80,15 @@ describe('view mode', () => {
     expect(parseView('other')).toBeNull();
   });
 });
+
+describe('channel strip', () => {
+  it('flags a lost or much quieter channel, never the LFE', async () => {
+    const { channelStates } = await import('../src/ui/dashboard/model');
+    const ch = (label: string, peak: number) => ({ label, peak, rms: peak - 3 });
+    expect(channelStates([ch('L', -20), ch('R', -21)]).map((c) => c.flag)).toEqual([null, null]);
+    expect(channelStates([ch('L', -20), ch('R', -95)]).map((c) => c.flag)).toEqual([null, 'silent']);
+    expect(channelStates([ch('L', -20), ch('R', -20), ch('C', -35), ch('LFE', -80), ch('Ls', -24), ch('Rs', -24)]).map((c) => c.flag)).toEqual([null, null, 'low', null, null, null]);
+    // Everything quiet (programme silence) is the silence alarm's job, not a channel problem.
+    expect(channelStates([ch('L', -95), ch('R', -95)]).map((c) => c.flag)).toEqual([null, null]);
+  });
+});

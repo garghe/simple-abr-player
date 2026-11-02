@@ -28,7 +28,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 - **Alarms tab**: black and frozen picture, silence, a lost channel, loudness off target, true peaks and out-of-phase stereo, with hold times in content time, an alarm banner on the video, timeline marks, a log with CSV export, sound or browser notification, and adjustable thresholds.
 - **Stream health & alarms demo** sample (`npm run sample:alarms`) and `npm run test:e2e:health`.
 - **New design** for playprobe.xyz: a two-row header (navigation, Copy link, Export, theme; load bar with format chip, DRM and proxy chips, Probe stream), refreshed light and dark themes, card layout.
-- **Inspect view** (default for VOD): summary cards under the player, throughput, a health score, loudness, channels, next ad break with a programme/break strip, and the bitrate ladder (declared vs measured).
+- **Inspect view** (default for VOD): summary cards under the player, throughput, a health score, loudness with per-channel meters (lost or quiet channels flagged), a DRM card for protected streams, next ad break with a programme/break strip, and the bitrate ladder (declared vs measured).
 - **Monitor view** (default for live): navigation rail, timeline under the player, health score, playback, loudness and a live events feed.
 - **Inspect | Monitor** switch; the choice is remembered per kind of stream (live/VOD), and Copy link includes the view.
 
