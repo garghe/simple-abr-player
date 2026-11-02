@@ -66,7 +66,16 @@ export interface FrameStats {
   luma: number;
   /** Mean absolute luma change against the previous sample, 0–1 (null for the first). */
   change: number | null;
+  /** Largest change of any one pixel, 0–1 (null for the first): a ticking clock on a still card. */
+  maxChange?: number | null;
 }
+
+/**
+ * A picture with any one area changing this much (0–1 luma, on the 64×36
+ * sample) is moving, however small the area: e.g. the clock on a test card.
+ * Encoder noise on a frozen picture stays far below it at that size.
+ */
+export const LOCAL_CHANGE = 0.12;
 
 /** BT.709 luma of an RGBA buffer, plus the change against the previous one. */
 export function frameStats(rgba: Uint8ClampedArray, previous: Float32Array | null): { stats: FrameStats; luma: Float32Array } {
@@ -74,13 +83,19 @@ export function frameStats(rgba: Uint8ClampedArray, previous: Float32Array | nul
   const luma = new Float32Array(n);
   let sum = 0;
   let diff = 0;
+  let max = 0;
+  const compare = previous !== null && previous.length === n;
   for (let i = 0; i < n; i++) {
     const y = (0.2126 * rgba[i * 4] + 0.7152 * rgba[i * 4 + 1] + 0.0722 * rgba[i * 4 + 2]) / 255;
     luma[i] = y;
     sum += y;
-    if (previous) diff += Math.abs(y - previous[i]);
+    if (compare) {
+      const d = Math.abs(y - previous[i]);
+      diff += d;
+      if (d > max) max = d;
+    }
   }
-  return { stats: { luma: sum / n, change: previous && previous.length === n ? diff / n : null }, luma };
+  return { stats: { luma: sum / n, change: compare ? diff / n : null, maxChange: compare ? max : null }, luma };
 }
 
 interface Condition {
@@ -90,6 +105,8 @@ interface Condition {
   sinceWall: number;
   /** Presentation time when it was last seen true. */
   lastTrue: number;
+  /** While an alarm is up: presentation time since which the condition has been gone, or null. */
+  goneSince: number | null;
   /** Presentation time of the last update (to spot seeks). */
   lastMedia: number;
 }
@@ -132,10 +149,11 @@ export class AlarmMonitor {
   private track(type: Exclude<AlarmType, 'peak'>, value: boolean | null, now: number, media: number, detail: () => string) {
     if (value === null) return;
     if (!this.settings.enabled[type]) value = false;
-    const c = this.conditions.get(type) ?? { since: null, sinceWall: now, lastTrue: media, lastMedia: media };
+    const c = this.conditions.get(type) ?? { since: null, sinceWall: now, lastTrue: media, lastMedia: media, goneSince: null };
     // A seek starts the measurement again.
     if (media < c.lastMedia - 0.5 || media > c.lastMedia + 2) {
       c.since = null;
+      c.goneSince = null;
       const e = this.active.get(type);
       if (e) {
         this.active.delete(type);
@@ -149,13 +167,21 @@ export class AlarmMonitor {
         c.sinceWall = now;
       }
       c.lastTrue = media;
+      c.goneSince = null;
       if (!this.active.has(type) && media - c.since >= this.settings.hold[type]) {
         this.raise({ id: ++this.seq, type, start: new Date(c.sinceWall), mediaStart: c.since, detail: detail() });
       }
-    } else if (c.since !== null && media - c.lastTrue >= RELEASE) {
+    } else if (!this.active.has(type)) {
+      // Not raised yet: the condition must hold without a break, so any break
+      // (a beep in a quiet tone, a ticking clock) starts the count again.
       c.since = null;
-      const e = this.active.get(type);
-      if (e) {
+    } else {
+      // Raised: it clears once the condition has been gone for RELEASE seconds in a row.
+      c.goneSince ??= media;
+      if (media - c.goneSince >= RELEASE) {
+        c.since = null;
+        c.goneSince = null;
+        const e = this.active.get(type)!;
         this.active.delete(type);
         this.close(e, now, c.lastTrue);
       }
@@ -188,7 +214,9 @@ export class AlarmMonitor {
     const s = this.settings;
     this.track('black', stats.luma * 100 < s.blackLevel, now, media, () => `Average luma ${(stats.luma * 100).toFixed(1)} % (below ${s.blackLevel} %)`);
     // Frozen: time moves on but the picture doesn't change. Not judged while the playhead is stuck (buffering).
-    const frozen = stats.change === null || !advancing ? null : stats.change * 100 < s.freezeLevel && stats.luma * 100 >= s.blackLevel;
+    // Any area moving clearly (e.g. a clock on a test card) means the picture isn't frozen.
+    const still = stats.change !== null && stats.change * 100 < s.freezeLevel && (stats.maxChange ?? 0) < LOCAL_CHANGE;
+    const frozen = stats.change === null || !advancing ? null : still && stats.luma * 100 >= s.blackLevel;
     this.track('freeze', frozen, now, media, () => `Picture change ${((stats.change ?? 0) * 100).toFixed(3)} % between frames while playing`);
   }
 

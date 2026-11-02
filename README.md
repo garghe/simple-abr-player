@@ -370,12 +370,12 @@ The tab also lists the media playlists (target duration, window, refreshes, last
 
 ## Picture and sound alarms
 
-The **Alarms** tab watches what the viewer gets, for leaving a channel running in an operations room. An alarm raises when its condition has lasted for the hold time (measured in content time, so it means the same at any playback speed) and clears after the condition has been gone for a second. Active alarms show as a red banner on the video and on the SCTE-35 timeline.
+The **Alarms** tab watches what the viewer gets, for leaving a channel running in an operations room. An alarm raises when its condition has lasted for the hold time **without a break** (measured in content time, so it means the same at any playback speed): any moment without it, like a beep in a quiet test tone, starts the count again. Once raised, it clears after the condition has been gone for a second in a row. Active alarms show as a red banner on the video and on the SCTE-35 timeline.
 
 | Alarm | Default threshold | Hold |
 | --- | --- | --- |
 | **Black picture** | average luma below 6 % | 2 s |
-| **Frozen picture** | average change between frames below 0.2 % while the playhead moves | 5 s |
+| **Frozen picture** | average change between frames below 0.2 % while the playhead moves, with no area changing clearly (a ticking clock on a still test card counts as moving) | 5 s |
 | **Silence** | every channel below −60 dBFS | 5 s |
 | **Channel lost** | one channel (not LFE) below −60 dBFS while the others carry audio | 10 s |
 | **Loudness off target** | short-term loudness more than 6 LU from the target (EBU R128 −23 LUFS or ATSC A/85 −24 LKFS, from the Audio tab) | 20 s |

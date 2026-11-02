@@ -65,6 +65,29 @@ describe('picture alarms', () => {
     expect(k.active.has('black')).toBe(true);
   });
 
+  it('a still test card with a ticking clock is not frozen', () => {
+    const m = new AlarmMonitor();
+    // Whole-frame change under the threshold, but the clock digits change a lot locally.
+    run(m, 30, 0, (now) => m.picture({ luma: 0.5, change: 0.0015, maxChange: 0.4 }, now, now / 1000, true));
+    expect(m.active.has('freeze')).toBe(false);
+    // Small changes every other sample, as when digits barely differ: still never 5 s in a row.
+    const k = new AlarmMonitor();
+    let i = 0;
+    run(k, 30, 0, (now) => k.picture({ luma: 0.5, change: i++ % 2 ? 0.001 : 0.004, maxChange: 0.05 }, now, now / 1000, true));
+    expect(k.active.has('freeze')).toBe(false);
+  });
+
+  it('finds the clock in real frames', () => {
+    // 8×8 grey frame; a 2×2 "digit" flips between black and white.
+    const grey = (digit: number) => new Uint8ClampedArray(Array.from({ length: 64 }, (_, i) => (i === 0 || i === 1 || i === 8 || i === 9 ? digit : 128)).flatMap((y) => [y, y, y, 255]));
+    const a = frameStats(grey(0), null);
+    const b = frameStats(grey(255), a.luma);
+    expect(b.stats.change! * 100).toBeGreaterThan(0.2);
+    expect(b.stats.maxChange).toBeCloseTo(1, 5);
+    const c = frameStats(grey(255), b.luma);
+    expect(c.stats.maxChange).toBeCloseTo(0, 6);
+  });
+
   it('respects disabled alarms', () => {
     const m = new AlarmMonitor();
     m.settings.enabled.black = false;
@@ -110,6 +133,25 @@ describe('sound alarms', () => {
     m.picture({ luma: 0, change: 0 }, 2000, 30, true);
     expect(m.active.has('black')).toBe(false);
     expect(m.log[0].end).toBeDefined();
+  });
+
+  it('does not call a tone with short beeps silent (beep every second)', () => {
+    const m = new AlarmMonitor();
+    // 100 ms readings: a 200 ms beep at the start of every second, digital silence otherwise.
+    for (let t = 0; t <= 40000; t += 100) m.audio(reading(t % 1000 < 200 ? [-12, -12] : [-120, -120]), t, t / 1000, -23);
+    expect(m.active.has('silence')).toBe(false);
+    expect(m.log.filter((e) => e.type === 'silence')).toHaveLength(0);
+  });
+
+  it('a raised alarm survives brief breaks and clears after 1 s without the condition', () => {
+    const m = new AlarmMonitor();
+    let t = run(m, 6, 0, (now) => m.audio(reading([-90, -90]), now, now / 1000, -23));
+    expect(m.active.has('silence')).toBe(true);
+    m.audio(reading([-20, -20]), t + 250, (t + 250) / 1000, -23); // one loud block
+    t = run(m, 2, t + 500, (now) => m.audio(reading([-90, -90]), now, now / 1000, -23));
+    expect(m.active.has('silence')).toBe(true);
+    run(m, 1.5, t, (now) => m.audio(reading([-20, -20]), now, now / 1000, -23));
+    expect(m.active.has('silence')).toBe(false);
   });
 
   it('holds state while no audio can be measured', () => {

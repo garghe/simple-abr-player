@@ -42,6 +42,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 
 ### Fixed
 
+- False **Silence** and **Frozen picture** alarms on test cards with a beep each second and a ticking clock (e.g. the DASH-IF livesim2 `testpic` streams): a short break in the condition now starts the hold time again, and a picture with any area clearly changing isn't frozen.
 - The active item in the Monitor navigation rail no longer crowds its label.
 - Tooltips no longer blink while the dashboard refreshes, and tab names show their explanation instead of repeating the name.
 - License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.
