@@ -5,6 +5,7 @@ import type { ScteEvent } from '../../scte/monitor';
 import { h } from '../dom';
 import { DeviceTab } from './device';
 import { DrmTab, type DrmActions } from './drm';
+import { HealthTab } from './health';
 import { LogTab } from './log';
 import { ManifestTab } from './manifest';
 import { NetworkTab } from './network';
@@ -29,6 +30,7 @@ export class StatsPanel {
   private active: Tab;
   private buttons = new Map<string, HTMLButtonElement>();
   readonly scteTab: ScteTab;
+  readonly healthTab: HealthTab;
   private pending = false;
 
   constructor(
@@ -39,12 +41,14 @@ export class StatsPanel {
     drmActions: DrmActions,
   ) {
     this.scteTab = new ScteTab(ctrl);
+    this.healthTab = new HealthTab(ctrl);
     this.tabs = [
       { id: 'overview', label: 'Overview', view: new OverviewTab(ctrl), events: ['tick', 'loaded', 'tracks'] },
       { id: 'tracks', label: 'Tracks', view: new TracksTab(ctrl), events: ['tracks', 'loaded'] },
       { id: 'audio', label: 'Audio', view: new AudioTab(ctrl, audio), events: ['audio', 'tracks', 'loaded', 'documents'] },
       { id: 'drm', label: 'DRM', view: new DrmTab(ctrl, drmActions), events: ['drm', 'loaded', 'tracks'], count: () => ctrl.drm.exchanges.filter((x) => x.error).length },
       { id: 'scte', label: 'SCTE-35', view: this.scteTab, events: ['scte', 'tick', 'loaded'], count: () => ctrl.scte.size },
+      { id: 'health', label: 'Health', view: this.healthTab, events: ['stream', 'tick', 'loaded'], count: () => this.healthTab.cache.count() },
       { id: 'network', label: 'Network', view: new NetworkTab(ctrl), events: ['network'], count: () => ctrl.network.filter((e) => e.error).length },
       { id: 'manifest', label: 'Manifest', view: new ManifestTab(ctrl), events: ['documents'] },
       { id: 'device', label: 'Device', view: new DeviceTab(), events: [] },

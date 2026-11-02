@@ -59,13 +59,13 @@ export class HealthCache {
   }
 }
 
-export function countBySeverity(issues: HealthIssue[]): Record<Severity, number> {
+export function countBySeverity(issues: { severity: Severity }[]): Record<Severity, number> {
   const c = { error: 0, warn: 0, info: 0 };
   for (const i of issues) c[i.severity]++;
   return c;
 }
 
-export function severitySummary(issues: HealthIssue[]): HTMLElement {
+export function severitySummary(issues: { severity: Severity }[]): HTMLElement {
   const c = countBySeverity(issues);
   if (!c.error && !c.warn && !c.info) return h('span', null, badge('no issues', 'ok'));
   const parts: HTMLElement[] = [];

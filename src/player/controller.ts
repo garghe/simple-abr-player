@@ -1,6 +1,8 @@
 import shaka from 'shaka-player';
 import { parseHlsCues, parseMasterPlaylist, type HlsCue } from '../scte/hls-cues';
 import { checkScteHealth, type HealthIssue } from '../scte/health';
+import { StreamMonitor, type StreamIssue } from '../stream/monitor';
+import { checkStreamHealth } from '../stream/health';
 import { dashRuns, findPods, podIssues, reportPods, type PodReport } from '../scte/ssai';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
@@ -170,6 +172,8 @@ export class PlayerController extends EventTarget {
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
   readonly drm = new DrmMonitor();
+  /** Playlist / MPD refreshes and downloaded segment timing, for the stream health checks. */
+  readonly stream = new StreamMonitor();
   /** The DRM picked in the settings (Widevine / PlayReady / FairPlay mode) when this browser lacks it. */
   unavailableDrm: string | null = null;
 
@@ -371,6 +375,7 @@ export class PlayerController extends EventTarget {
     this.documents.clear();
     this.samples.length = 0;
     this.marks.length = 0;
+    this.stream.clear();
     this.stallStart = null;
     this.scte.clear();
     this.format = 'unknown';
@@ -453,6 +458,12 @@ export class PlayerController extends EventTarget {
         this.captureManifest(uri, response.data, advanced);
       }
       const stream = context?.stream;
+      if (type === shaka.net.NetworkingEngine.RequestType.SEGMENT && stream && (stream.type === 'video' || stream.type === 'audio')) {
+        this.noteStreamSegment(stream, advanced, uri, response.data, context?.segment ?? null);
+      } else if (type === shaka.net.NetworkingEngine.RequestType.SEGMENT && advanced === shaka.net.NetworkingEngine.AdvancedRequestType.INIT_SEGMENT) {
+        // Init segments Shaka reads while parsing the manifest (no stream yet).
+        this.stream.noteInit(null, uri, toBytes(response.data));
+      }
       if (this.onAudioSegment && type === shaka.net.NetworkingEngine.RequestType.SEGMENT && stream?.type === 'audio') {
         const A = shaka.net.NetworkingEngine.AdvancedRequestType;
         const d = response.data;
@@ -619,11 +630,16 @@ export class PlayerController extends EventTarget {
         /* unusual MPD: no ad-insertion view */
       }
     }
+    if (kind === 'MPD') this.stream.noteMpd(text);
     if (kind === 'Master playlist') {
-      for (const m of parseMasterPlaylist(text, uri)) this.scte.setPlaylistLabel(m.uri, m.label, m.kind);
+      for (const m of parseMasterPlaylist(text, uri)) {
+        this.scte.setPlaylistLabel(m.uri, m.label, m.kind);
+        this.stream.setLabel(m.uri, m.label);
+      }
     }
     if (kind === 'Media playlist') {
       const info = parseHlsCues(text, uri);
+      this.stream.notePlaylist(uri, text, info);
       this.scte.notePlaylist(uri, info);
       this.scte.noteHlsRuns(uri, info);
       if (info.cues.length) this.scte.addHlsCues(info.cues);
@@ -704,6 +720,7 @@ export class PlayerController extends EventTarget {
     });
 
     this.scte.onChange(() => this.emit('scte'));
+    this.stream.onChange(() => this.emit('stream'));
   }
 
   private handleRegion(region: shaka.extern.TimelineRegionInfo) {
@@ -720,6 +737,39 @@ export class PlayerController extends EventTarget {
       payload: binary,
       xmlSummary: region.eventNode ? xmlSummary(region.eventNode) : undefined,
     });
+  }
+
+  /** Feeds a downloaded init or media segment to the stream health checks. */
+  private noteStreamSegment(stream: shaka.extern.Stream, advanced: number | null | undefined, uri: string, data: ArrayBuffer | ArrayBufferView, ref: shaka.media.SegmentReference | null) {
+    const A = shaka.net.NetworkingEngine.AdvancedRequestType;
+    if (!this.stream.streams.has(stream.id)) {
+      const variants = this.player.getManifest()?.variants.filter((v) => v.video?.id === stream.id || v.audio?.id === stream.id) ?? [];
+      const format = this.player.getManifestType() === 'HLS' ? 'HLS' : 'DASH';
+      const label =
+        stream.type === 'video'
+          ? `video ${stream.width ?? '?'}×${stream.height ?? '?'}${stream.bandwidth ? ` ${Math.round(stream.bandwidth / 1000)} kbps` : ''}`
+          : `audio ${stream.language || ''}${stream.channelsCount ? ` ${stream.channelsCount}ch` : ''}`.trim();
+      this.stream.noteStream({
+        id: stream.id,
+        kind: stream.type as 'video' | 'audio',
+        label,
+        declaredCodecs: stream.codecs,
+        // HLS BANDWIDTH belongs to the variant (video + audio): only compare it with video.
+        declaredBandwidth: format === 'HLS' ? (stream.type === 'video' ? Math.max(0, ...variants.map((v) => v.bandwidth)) || undefined : undefined) : stream.bandwidth || undefined,
+        format,
+        width: stream.width ?? undefined,
+        height: stream.height ?? undefined,
+      });
+    }
+    const bytes = toBytes(data);
+    if (advanced === A.INIT_SEGMENT) this.stream.noteInit(stream.id, uri, bytes);
+    else if (ref) this.stream.noteSegment(stream.id, uri, ref.getStartTime(), ref.getEndTime(), bytes);
+  }
+
+  /** Stream health: playlist / MPD and segment problems. */
+  streamHealth(): StreamIssue[] {
+    const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
+    return checkStreamHealth(this.stream, { frameDuration: fps ? 1 / fps : undefined });
   }
 
   /** Newest media time the stream offers (the live edge), or null before load. */

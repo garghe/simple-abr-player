@@ -70,6 +70,8 @@ export interface HlsPlaylistInfo {
   segments: HlsSegment[];
   /** Sum of the segment durations. */
   totalDuration: number;
+  /** EXT-X-DISCONTINUITY-SEQUENCE (0 when absent). */
+  discontinuitySequence: number;
 }
 
 /** Parses an attribute list like `ID="a",DURATION=30,SCTE35-OUT=0xFC..`. */
@@ -106,6 +108,7 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
     cues: [],
     segments: [],
     totalDuration: 0,
+    discontinuitySequence: 0,
   };
   if (!lines[0]?.startsWith('#EXTM3U')) return info;
 
@@ -164,6 +167,9 @@ export function parseHlsCues(text: string, playlistUri: string): HlsPlaylistInfo
         break;
       case '#EXT-X-DISCONTINUITY':
         discontinuity = true;
+        break;
+      case '#EXT-X-DISCONTINUITY-SEQUENCE':
+        info.discontinuitySequence = num(value) ?? 0;
         break;
       case '#EXT-X-ENDLIST':
         info.isLive = false;
