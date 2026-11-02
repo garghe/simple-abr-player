@@ -372,7 +372,11 @@ function formatUpid(type: number, data: Uint8Array): string {
     case 0x11:
       return ascii(data);
     case 0x08:
-      return '0x' + toHex(data);
+      // TI (Turner Identifier / AiringID): a 64-bit number.
+      return data.length === 8 ? `${BigInt('0x' + toHex(data))} (0x${toHex(data)})` : '0x' + toHex(data);
+    case 0x0c:
+      // MPU: 32-bit format_identifier (usually 4 ASCII letters) + private data.
+      return data.length >= 4 ? `[${ascii(data.subarray(0, 4))}] 0x${toHex(data.subarray(4))}` : '0x' + toHex(data);
     case 0x0a: {
       // EIDR: 2-byte sub-prefix + 10-byte binary suffix.
       if (data.length === 12) {

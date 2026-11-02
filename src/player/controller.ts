@@ -1,5 +1,7 @@
 import shaka from 'shaka-player';
-import { parseHlsCues, type HlsCue } from '../scte/hls-cues';
+import { parseHlsCues, parseMasterPlaylist, type HlsCue } from '../scte/hls-cues';
+import { checkScteHealth, type HealthIssue } from '../scte/health';
+import { dashRuns, findPods, podIssues, reportPods, type PodReport } from '../scte/ssai';
 import { ScteMonitor, isScteScheme } from '../scte/monitor';
 import { DrmMonitor, preview } from '../drm/monitor';
 import { initProtectionToDeclared, parseHlsProtection, parseMpdProtection, scanInitSegment } from '../drm/inspect';
@@ -91,6 +93,17 @@ export interface NetworkEntry {
   error?: string;
 }
 
+/** Playback events placed on the SCTE timeline (media time). */
+export interface PlaybackMark {
+  time: number;
+  kind: 'quality' | 'stall' | 'gap' | 'error';
+  label: string;
+  /** Stalls: seconds spent waiting. */
+  duration?: number;
+}
+
+const MAX_MARKS = 2000;
+
 export interface LogEntry {
   at: Date;
   level: 'info' | 'warn' | 'error';
@@ -152,6 +165,8 @@ export class PlayerController extends EventTarget {
   readonly scte = new ScteMonitor();
   readonly network: NetworkEntry[] = [];
   readonly log: LogEntry[] = [];
+  readonly marks: PlaybackMark[] = [];
+  private stallStart: { time: number; at: number } | null = null;
   readonly documents = new Map<string, CapturedDocument>();
   readonly samples: Sample[] = [];
   readonly drm = new DrmMonitor();
@@ -182,6 +197,12 @@ export class PlayerController extends EventTarget {
     // can be styled and moved clear of the control bar.
     if (container) this.player.setVideoContainer(container);
     this.scte.setHlsResolver((cue) => this.resolveHlsCueTime(cue));
+    this.scte.setContext(() => ({
+      live: Boolean(this.loadedUrl) && this.player.isLive(),
+      availabilityEnd: this.availabilityEnd(),
+      bufferEnd: this.bufferEnd(),
+      segmentAt: (t) => this.videoSegmentAt(t),
+    }));
     this.installFilters();
     this.installEvents();
   }
@@ -329,6 +350,8 @@ export class PlayerController extends EventTarget {
     const t0 = performance.now();
     await this.player.load(options.url, options.startTime ?? null);
     this.loadedUrl = options.url;
+    const first = this.player.getVariantTracks().find((t) => t.active);
+    if (first) this.mark('quality', `${first.height ?? '?'}p @ ${Math.round(first.bandwidth / 1000)} kbps (start)`);
     const type = this.player.getManifestType();
     this.format = type === 'DASH' ? 'DASH' : type === 'HLS' ? 'HLS' : 'unknown';
     this.info(`Loaded ${this.format} ${this.player.isLive() ? 'live' : 'VOD'} stream in ${Math.round(performance.now() - t0)} ms`);
@@ -347,6 +370,8 @@ export class PlayerController extends EventTarget {
     this.network.length = 0;
     this.documents.clear();
     this.samples.length = 0;
+    this.marks.length = 0;
+    this.stallStart = null;
     this.scte.clear();
     this.format = 'unknown';
     this.usingProxy = false;
@@ -587,8 +612,20 @@ export class PlayerController extends EventTarget {
     const protection = kind === 'MPD' ? parseMpdProtection(text) : kind === 'Manifest' ? [] : parseHlsProtection(text);
     if (protection.length) this.drm.addDeclared(protection);
 
+    if (kind === 'MPD') {
+      try {
+        this.scte.noteDashRuns(dashRuns(text, uri));
+      } catch {
+        /* unusual MPD: no ad-insertion view */
+      }
+    }
+    if (kind === 'Master playlist') {
+      for (const m of parseMasterPlaylist(text, uri)) this.scte.setPlaylistLabel(m.uri, m.label, m.kind);
+    }
     if (kind === 'Media playlist') {
       const info = parseHlsCues(text, uri);
+      this.scte.notePlaylist(uri, info);
+      this.scte.noteHlsRuns(uri, info);
       if (info.cues.length) this.scte.addHlsCues(info.cues);
     }
   }
@@ -607,6 +644,7 @@ export class PlayerController extends EventTarget {
     on('error', (e) => {
       const err = (e as unknown as { detail: shaka.util.Error }).detail;
       this.error(describeShakaError(err));
+      this.mark('error', describeShakaError(err));
       this.emit('error', err);
     });
     on('trackschanged', () => this.emit('tracks'));
@@ -614,11 +652,14 @@ export class PlayerController extends EventTarget {
       this.emit('tracks');
       const v = this.player.getVariantTracks().find((t) => t.active);
       if (v) this.info(`Variant changed → ${v.width ?? '?'}x${v.height ?? '?'} @ ${Math.round(v.bandwidth / 1000)} kbps`);
+      if (v) this.mark('quality', `${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps (manual)`, this.bufferEnd() ?? undefined);
     });
     on('adaptation', () => {
       this.emit('tracks');
       const v = this.player.getVariantTracks().find((t) => t.active);
       if (v) this.info(`ABR switch → ${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps`);
+      // The new rendition starts where the buffer ends.
+      if (v) this.mark('quality', `${v.height ?? '?'}p @ ${Math.round(v.bandwidth / 1000)} kbps`, this.bufferEnd() ?? undefined);
     });
     on('audiotrackschanged', () => this.emit('tracks'));
     on('audiotrackchanged', () => this.emit('tracks'));
@@ -626,10 +667,21 @@ export class PlayerController extends EventTarget {
     on('abrstatuschanged', () => this.emit('tracks'));
     on('buffering', (e) => {
       const buffering = (e as unknown as { buffering: boolean }).buffering;
+      // Rebuffering after playback started (not the initial load or a seek into unbuffered media).
+      if (buffering && this.loadedUrl && !this.video.seeking && this.video.played.length) {
+        this.stallStart = { time: this.video.currentTime, at: performance.now() };
+      } else if (!buffering && this.stallStart) {
+        const waited = (performance.now() - this.stallStart.at) / 1000;
+        this.mark('stall', `Rebuffering ${waited.toFixed(1)} s`, this.stallStart.time, waited);
+        this.stallStart = null;
+      }
       this.emit('buffering', buffering);
     });
     on('stalldetected', () => this.warn('Stall detected'));
-    on('gapjumped', () => this.warn('Gap jumped'));
+    on('gapjumped', () => {
+      this.warn('Gap jumped');
+      this.mark('gap', 'Gap jumped');
+    });
     on('manifestupdated', () => this.scte.resolvePending());
     on('keystatuschanged', () => {
       this.drm.keyStatuses = this.player.getKeyStatuses();
@@ -668,6 +720,66 @@ export class PlayerController extends EventTarget {
       payload: binary,
       xmlSummary: region.eventNode ? xmlSummary(region.eventNode) : undefined,
     });
+  }
+
+  /** Newest media time the stream offers (the live edge), or null before load. */
+  availabilityEnd(): number | null {
+    const timeline = this.loadedUrl ? this.player.getManifest()?.presentationTimeline : null;
+    const end = timeline?.getSegmentAvailabilityEnd();
+    return end !== undefined && Number.isFinite(end) ? end : null;
+  }
+
+  private bufferEnd(): number | null {
+    const ranges = this.player.getBufferedInfo().total;
+    return ranges.length ? ranges[ranges.length - 1].end : null;
+  }
+
+  /** The video segment of the playing variant that contains a presentation time. */
+  videoSegmentAt(time: number): { start: number; end: number } | null {
+    const manifest = this.loadedUrl ? this.player.getManifest() : null;
+    const activeId = this.player.getVariantTracks().find((t) => t.active)?.id;
+    const variant = manifest?.variants.find((v) => v.id === activeId) ?? manifest?.variants[0];
+    const index = variant?.video?.segmentIndex;
+    if (!index) return null;
+    const pos = index.find(time);
+    const ref = pos === null ? null : index.get(pos);
+    return ref ? { start: ref.getStartTime(), end: ref.getEndTime() } : null;
+  }
+
+  /** Wall-clock time of a presentation time (live, or streams with a program date time). */
+  wallClockAt(time: number): Date | null {
+    const start = this.loadedUrl ? this.player.getPresentationStartTimeAsDate() : null;
+    return start ? new Date(start.getTime() + time * 1000) : null;
+  }
+
+  private horizon(): number | null {
+    if (!this.loadedUrl) return null;
+    if (this.player.isLive()) return this.availabilityEnd();
+    return Number.isFinite(this.video.duration) ? this.video.duration : null;
+  }
+
+  /** Inserted ad pods (SSAI / interstitials) matched with their SCTE breaks. */
+  adPods(): PodReport[] {
+    const events = this.scte.list();
+    return reportPods(findPods([...this.scte.runs.values()], events), events);
+  }
+
+  /** Health checks over the markers seen so far (ad insertion included). */
+  scteHealth(minLead?: number): HealthIssue[] {
+    const live = Boolean(this.loadedUrl) && this.player.isLive();
+    const fps = this.player.getVariantTracks().find((t) => t.active)?.frameRate;
+    const events = this.scte.list();
+    const issues = checkScteHealth(events, {
+      live,
+      horizon: this.horizon(),
+      playlists: [...this.scte.playlists.values()],
+      minLead,
+      frameDuration: fps ? 1 / fps : undefined,
+    });
+    const rank = { error: 0, warn: 1, info: 2 };
+    return [...issues, ...podIssues(this.adPods(), events, this.horizon())].sort(
+      (a, b) => rank[a.severity] - rank[b.severity] || (a.time ?? Infinity) - (b.time ?? Infinity),
+    );
   }
 
   /** Map an HLS cue to presentation time. */
@@ -722,6 +834,12 @@ export class PlayerController extends EventTarget {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  private mark(kind: PlaybackMark['kind'], label: string, time = this.video.currentTime, duration?: number) {
+    if (!this.loadedUrl && kind !== 'error') return;
+    this.marks.push({ time, kind, label, duration });
+    if (this.marks.length > MAX_MARKS) this.marks.shift();
+  }
 
   info(message: string) {
     this.pushLog('info', message);

@@ -155,6 +155,8 @@ select {
 button,
 select,
 input[type='url'],
+input[type='text'],
+input[type='number'],
 textarea {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -1718,4 +1720,372 @@ pre .hl {
 .player.drm-protected .audio-overlay {
   backdrop-filter: none;
   background: rgba(10, 12, 18, 0.92);
+}
+
+/* ---- SCTE sub-views and health ---- */
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subnav button {
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 6px 10px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.subnav button[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.sev-summary {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lead-input {
+  width: 4.5em;
+}
+
+.issue-group {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border-left: 4px solid var(--info-text);
+}
+
+.issue-group.error {
+  border-left-color: var(--danger);
+}
+
+.issue-group.warn {
+  border-left-color: var(--ad);
+}
+
+.issue-group summary {
+  cursor: pointer;
+}
+
+ul.issues {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.92em;
+}
+
+ul.issues li {
+  margin: 3px 0;
+}
+
+.ad-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ad-banner .skip-break {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(28, 25, 23, 0.4);
+  background: rgba(255, 255, 255, 0.35);
+  color: #1c1917;
+}
+
+.scte-nav {
+  margin-top: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---- SCTE timeline ---- */
+.timeline-chart {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.timeline-svg {
+  display: block;
+}
+
+.timeline-svg .lane {
+  fill: transparent;
+}
+
+.timeline-svg .lane.odd {
+  fill: var(--panel-2);
+}
+
+.timeline-svg .lane-label {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.timeline-svg .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.timeline-svg .axis {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+.timeline-svg .span,
+.timeline-svg .point,
+.timeline-svg .issue,
+.timeline-svg .mark {
+  cursor: pointer;
+}
+
+.timeline-svg .span {
+  fill: var(--muted);
+  opacity: 0.85;
+}
+
+.timeline-svg .span.breaks,
+.timeline-svg .span.break,
+.timeline-svg .span.ad {
+  fill: var(--ad);
+}
+
+.timeline-svg .span.pod {
+  fill: #ef4444;
+}
+
+.timeline-svg .span.programme {
+  fill: var(--accent);
+}
+
+.timeline-svg .span.chapter {
+  fill: #14b8a6;
+}
+
+.timeline-svg .span.po {
+  fill: #a78bfa;
+}
+
+.timeline-svg .span.promo {
+  fill: #f472b6;
+}
+
+.timeline-svg .span.open {
+  opacity: 0.45;
+  stroke: currentColor;
+  stroke-dasharray: 3 3;
+}
+
+.timeline-svg .point.out {
+  fill: var(--ad);
+}
+
+.timeline-svg .point.in {
+  fill: var(--ok);
+}
+
+.timeline-svg .point.other {
+  fill: var(--info-text);
+}
+
+.timeline-svg .issue.error {
+  fill: var(--danger);
+}
+
+.timeline-svg .issue.warn {
+  fill: var(--ad);
+}
+
+.timeline-svg .issue.info {
+  fill: var(--info-text);
+}
+
+.timeline-svg .mark.quality {
+  fill: var(--accent);
+}
+
+.timeline-svg .mark.stall,
+.timeline-svg .mark.error,
+.timeline-svg .mark.gap {
+  fill: var(--danger);
+}
+
+.timeline-svg .mark-label {
+  font-size: 10px;
+  fill: var(--text);
+}
+
+.timeline-svg .playhead {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.timeline-info {
+  margin-top: 8px;
+  min-height: 1.4em;
+}
+
+.scte-nav select {
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 5em;
+}
+
+.bfield input,
+.bfield select,
+.lead-input {
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+/* ---- SCTE builder ---- */
+.bgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.bgrid.tags {
+  margin-top: 12px;
+}
+
+.bfield {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bfield input,
+.bfield select {
+  width: 100%;
+  color: var(--text);
+}
+
+.bfield .pair {
+  display: flex;
+  gap: 6px;
+}
+
+.bchecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: center;
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+
+.bdesc {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 8px 12px;
+}
+
+.bdesc legend {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.builder-out {
+  margin-top: 14px;
+}
+
+.bout-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.bout pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- SCTE structure and monitor ---- */
+.structure-tree,
+.structure-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.structure-tree {
+  padding-left: 0;
+}
+
+.structure-tree ul {
+  border-left: 1px dashed var(--border);
+  margin-left: 6px;
+}
+
+.structure-item {
+  padding: 4px 6px;
+  margin: 3px 0;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.structure-item.programme {
+  border-left-color: var(--accent);
+}
+
+.structure-item.chapter {
+  border-left-color: #14b8a6;
+}
+
+.structure-item.breaks,
+.structure-item.break,
+.structure-item.ad {
+  border-left-color: var(--ad);
+}
+
+.structure-item.po {
+  border-left-color: #a78bfa;
+}
+
+.structure-item.promo {
+  border-left-color: #f472b6;
+}
+
+.structure-kind {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  min-width: 7.5em;
+}
+
+.monitor-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 6px 0 10px;
 }

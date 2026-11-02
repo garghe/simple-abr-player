@@ -5,6 +5,9 @@ import { AudioOverlay } from './ui/audio/overlay';
 import { drmHint, drmUnavailableHint } from './drm/errors';
 import { isDrmConfigured, normaliseDrm } from './drm/settings';
 import { DrmPanel } from './ui/drm/panel';
+import { ScteNavigator } from './ui/scte/navigator';
+import { BuilderView } from './ui/scte/builder';
+import { MonitorView, ScteAlerts } from './ui/scte/monitor';
 import { APP_VERSION, RELEASE_DATE, renderVersion } from './version';
 import { presets, type Preset } from './presets';
 import { loadHistory, loadSettings, parseHeaders, pushHistory, saveSettings, type Settings } from './settings';
@@ -33,6 +36,11 @@ const autoplayInput = $('#autoplay') as HTMLInputElement;
 const message = $('#player-message');
 const spinner = $('#spinner');
 const adBanner = $('#ad-banner');
+const adBannerText = h('span');
+adBanner.append(
+  adBannerText,
+  h('button', { type: 'button', class: 'skip-break', title: 'Skip to the end of this break (s)', onclick: () => scteNav.skipBreak() }, 'Skip ›'),
+);
 const nerdOverlay = $('#nerd-overlay');
 const summary = $('#stream-summary');
 const toast = $('#toast');
@@ -187,6 +195,22 @@ const panel = new StatsPanel(ctrl, $('#tabs'), $('#tab-body'), audio, {
     showToast(`License URL from the stream set for ${system === 'playready' ? 'PlayReady' : 'Widevine'}: reload the stream to use it`);
   },
 });
+const scteNav = new ScteNavigator(ctrl, showToast);
+panel.scteTab.setNavigation(scteNav.toolbar());
+const scteBuilder = new BuilderView(showToast);
+const scteAlerts = new ScteAlerts(ctrl);
+const scteMonitor = new MonitorView(ctrl, scteAlerts, panel.scteTab.health, showToast);
+panel.scteTab.addView({ id: 'monitor', label: 'Monitor', el: scteMonitor.el, render: () => scteMonitor.render() });
+panel.scteTab.addView({ id: 'builder', label: 'Builder', el: scteBuilder.el, render: () => scteBuilder.render() });
+// Marker and ad-break shortcuts (the player's own keys live in Controls).
+document.addEventListener('keydown', (e) => {
+  const target = e.target as HTMLElement;
+  if (!ctrl.loadedUrl || target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const action = { n: () => scteNav.next(), p: () => scteNav.previous(), b: () => scteNav.beforeNextBreak(), s: () => scteNav.skipBreak() }[e.key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
 
 function renderOverlay() {
@@ -214,7 +238,7 @@ function renderAdBanner() {
   adBanner.hidden = !br;
   playerEl.classList.toggle('in-break', Boolean(br));
   if (br) {
-    adBanner.textContent =
+    adBannerText.textContent =
       br.remaining !== undefined ? `AD BREAK · ${Math.ceil(br.remaining)}s remaining` : `AD BREAK · since ${formatTime(br.start)}`;
     adBanner.title = br.event.summary;
   }

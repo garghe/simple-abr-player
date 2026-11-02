@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Planned as 1.1.0.
+Planned as 1.1.0 (PlayReady) and 1.2.0 (SCTE-35 tools).
 
 ### Added
 
@@ -14,6 +14,19 @@ Planned as 1.1.0.
 - PlayReady headers decoded from PSSH, `mspr:pro` and HLS key tags (key IDs, version, algorithm, license URL), with a **Use this** button in the DRM tab for the stream's license URL.
 - Microsoft PlayReady test streams (DASH, and HLS with CBCS) in the test stream list.
 - A clear message when the DRM chosen in the settings doesn't exist in the browser.
+- **SCTE-35 Health**: checks of OUT/IN pairing and advertised durations, segmentation start/end pairs, event IDs, CRC, `CUE-OUT-CONT` elapsed times, `DATERANGE` attributes, markers missing from some playlists, lead time, segment alignment and `splice_time` consistency, with errors, warnings and notes.
+- **Splice timing** in the marker detail: lead time, segment alignment, `splice_time` with `pts_adjustment`, wall clock, playlists carrying the marker.
+- **Timeline** of breaks, segmentation (programme, chapter, break, ad, placement opportunity, promo), inserted ads, health issues, quality switches and stalls.
+- **Structure** view (programme → chapter → break → placement opportunity → ad) with decoded UPIDs.
+- **Ad insertion** detection (HLS discontinuities from another origin, DASH periods, HLS Interstitials), matched with breaks, with underfill/overfill.
+- **Monitor** mode: sound and browser notifications for new markers, counts per hour, CSV export.
+- **SCTE-35 message builder** with presets, output as base64, hex, HLS tags and DASH EventStream.
+- Marker and break navigation: `n` / `p` / `b` / `s` keys, buttons, and a Skip button on the ad-break banner.
+- **SCTE-35 health demo** sample stream with an inserted ad pod and deliberate signalling errors; `npm run test:e2e:scte`.
+
+### Changed
+
+- TI UPIDs are shown as a number and MPU UPIDs with their format identifier.
 
 ### Fixed
 
