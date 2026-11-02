@@ -154,6 +154,23 @@ describe('sound alarms', () => {
     expect(m.active.has('silence')).toBe(false);
   });
 
+  it('judges phase only on real audio, not on the near-silence between beeps', () => {
+    // In-phase beeps (+0.95) with noise between them whose correlation is meaningless (−0.74).
+    const m = new AlarmMonitor();
+    for (let t = 0; t <= 30000; t += 100) {
+      const beep = t % 1000 < 200;
+      m.audio(reading(beep ? [-12, -12] : [-69, -69], { shortTerm: -23, correlation: beep ? 0.95 : -0.74 }), t, t / 1000, -23);
+    }
+    expect(m.active.has('phase')).toBe(false);
+    // Out-of-phase beeps raise it, even with quiet gaps in between.
+    const k = new AlarmMonitor();
+    for (let t = 0; t <= 30000; t += 100) {
+      const beep = t % 1000 < 200;
+      k.audio(reading(beep ? [-12, -12] : [-69, -69], { shortTerm: -23, correlation: beep ? -0.9 : 0.2 }), t, t / 1000, -23);
+    }
+    expect(k.active.has('phase')).toBe(true);
+  });
+
   it('holds state while no audio can be measured', () => {
     const m = new AlarmMonitor();
     let t = run(m, 6, 0, (now) => m.audio(reading([-90, -90]), now, now / 1000, -23));

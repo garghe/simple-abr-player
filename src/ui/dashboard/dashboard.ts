@@ -53,6 +53,8 @@ export class Dashboard {
   readonly el = h('div', { class: 'tab-pane dashboard' });
   private chart = h('canvas', { class: 'chart dash-chart', height: 120 });
   private timeline: TimelineView;
+  /** Recent highest level per channel, for the channel meters. */
+  private peakMemory: { value: number; at: number }[] = [];
   private throughput = h('div', { class: 'card dash-card' });
   private timelineCard = h('div', { class: 'card dash-card timeline-card' });
 
@@ -203,7 +205,17 @@ export class Dashboard {
   }
 
   /** One thin meter per channel with its level; lost or unbalanced channels stand out. */
-  private channelStrip(channels: { label: string; peak: number; rms: number }[]): HTMLElement {
+  private channelStrip(levels: { label: string; peak: number; hold: number; rms: number }[]): HTMLElement {
+    // The highest level of the last 1.5 s: a card redrawn once a second would
+    // otherwise mostly catch the gaps in short sounds (beeps, speech).
+    const now = performance.now();
+    const channels = levels.map((c, i) => {
+      const level = Math.max(c.peak, c.hold);
+      const m = this.peakMemory[i];
+      if (!m || level >= m.value || now - m.at > 1500) this.peakMemory[i] = { value: level, at: now };
+      return { ...c, peak: this.peakMemory[i].value };
+    });
+    this.peakMemory.length = levels.length;
     const states = channelStates(channels, this.d.alarms.settings.silenceLevel);
     const flagged = states.filter((c) => c.flag);
     return h(

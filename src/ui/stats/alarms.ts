@@ -3,7 +3,7 @@ import type { PictureSampler } from '../../alarms/picture';
 import type { PlayerController } from '../../player/controller';
 import { beep, enableNotifications, notify } from '../alert';
 import { badge, dataTable, h } from '../dom';
-import { formatTime } from '../format';
+import { timeLabel } from '../clock';
 
 const SETTINGS_KEY = 'sap.alarms.v1';
 const PREFS_KEY = 'sap.alarmAlerts.v1';
@@ -67,7 +67,7 @@ export class AlarmsTab {
     alarms.onAlarm((e, raised) => {
       if (!raised || !this.ctrl.loadedUrl) return;
       if (this.prefs.sound) beep(PICTURE.includes(e.type) ? [520, 520, 520] : [700, 500, 700]);
-      if (this.prefs.notify) notify(`${ALARM_LABELS[e.type]}`, `${formatTime(e.mediaStart)} · ${e.detail}`, `playprobe-alarm-${e.type}`);
+      if (this.prefs.notify) notify(`${ALARM_LABELS[e.type]}`, `${timeLabel(this.ctrl)(e.mediaStart)} · ${e.detail}`, `playprobe-alarm-${e.type}`);
     });
     this.el.append(this.status, h('h3', null, 'Alarm log'), this.logEl, this.settingsEl());
   }
@@ -106,7 +106,7 @@ export class AlarmsTab {
           'div',
           { class: 'alarm-state' },
           active.length
-            ? active.map((t) => h('div', null, badge(ALARM_LABELS[t].toUpperCase(), 'warn'), h('span', { class: 'small' }, ` since ${formatTime(a.active.get(t)!.mediaStart)}`)))
+            ? active.map((t) => h('div', null, badge(ALARM_LABELS[t].toUpperCase(), 'warn'), h('span', { class: 'small' }, ` since ${timeLabel(this.ctrl)(a.active.get(t)!.mediaStart)}`)))
             : note
               ? h('span', { class: 'muted small' }, note)
               : badge('OK', 'ok'),
@@ -142,7 +142,7 @@ export class AlarmsTab {
       dataTable(
         ['Time', 'Alarm', 'Duration', 'Detail'],
         log.slice(0, 200).map((e) => [
-          h('button', { type: 'button', class: 'linklike mono', title: e.start.toISOString(), onclick: () => (this.ctrl.video.currentTime = Math.max(0, e.mediaStart - 1)) }, formatTime(e.mediaStart)),
+          h('button', { type: 'button', class: 'linklike mono', title: e.start.toISOString(), onclick: () => (this.ctrl.video.currentTime = Math.max(0, e.mediaStart - 1)) }, timeLabel(this.ctrl)(e.mediaStart)),
           badge(ALARM_LABELS[e.type], e.end ? 'out' : 'warn'),
           e.mediaEnd !== undefined ? `${(e.mediaEnd - e.mediaStart).toFixed(1)} s` : 'active',
           h('span', { class: 'small' }, e.detail),

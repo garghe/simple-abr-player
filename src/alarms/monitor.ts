@@ -111,6 +111,9 @@ interface Condition {
   lastMedia: number;
 }
 
+/** dBFS under which the L/R correlation is too quiet to judge phase. */
+export const PHASE_MIN_LEVEL = -40;
+
 /** Seconds of presentation time without the condition before an alarm clears. */
 const RELEASE = 1;
 const MAX_LOG = 1000;
@@ -242,7 +245,8 @@ export class AlarmMonitor {
     const off = Number.isFinite(r.shortTerm) && !silent ? Math.abs(r.shortTerm - target) > s.loudnessTolerance : silent ? null : false;
     this.track('loudness', off, now, media, () => `Short-term loudness ${r.shortTerm.toFixed(1)} LUFS, target ${target} ±${s.loudnessTolerance} LU`);
 
-    const phase = r.correlation === null || silent ? false : r.correlation < s.phaseLevel;
+    // Correlation of near-silence (noise, dither between beeps) says nothing: wait for real audio.
+    const phase = r.correlation === null || maxPeak < PHASE_MIN_LEVEL ? null : r.correlation < s.phaseLevel;
     this.track('phase', phase, now, media, () => `L/R correlation ${r.correlation?.toFixed(2)} (below ${s.phaseLevel})`);
 
     // True peak: an instant event each time the running maximum goes over the limit by more.

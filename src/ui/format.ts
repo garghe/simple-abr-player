@@ -37,6 +37,24 @@ export function formatTime(seconds: number): string {
   return hh ? `${sign}${hh}:${pad(mm)}:${pad(ss)}` : `${sign}${pad(mm)}:${pad(ss)}`;
 }
 
+/** Time of day (24 h, this device's time zone), as the live clock under the player. */
+export function clockTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/**
+ * Labels for player times. Live streams count from their availability start
+ * (often 1970, so times are billions of seconds): show them as the clock time
+ * they were broadcast, using the mapping of the playhead (`wallNow` at
+ * `mediaNow`). On demand, and when no mapping exists, show the position.
+ */
+export function mediaTimeLabel(live: boolean, wallNow: Date | null, mediaNow: number): (t: number) => string {
+  if (!live || !wallNow || !Number.isFinite(mediaNow)) return formatTime;
+  const offset = wallNow.getTime() - mediaNow * 1000;
+  return (t) => (Number.isFinite(t) ? clockTime(new Date(offset + t * 1000)) : '--:--');
+}
+
 export function formatPrecise(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '—';
   return `${seconds.toFixed(3)}s`;

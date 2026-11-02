@@ -1,7 +1,7 @@
 import type { PlayerController } from '../../player/controller';
 import { SCTE_LANES, buildTimeline, type LaneId } from '../../scte/timeline';
 import { h } from '../dom';
-import { formatTime } from '../format';
+import { timeLabel } from '../clock';
 import type { HealthCache } from './health';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -88,6 +88,7 @@ export class TimelineView {
       return;
     }
     const [t0, t1] = range;
+    const formatTime = timeLabel(this.ctrl);
     const plotW = width - LABEL_W - 8;
     const x = (t: number) => LABEL_W + ((t - t0) / (t1 - t0)) * plotW;
     const inView = (t: number) => t >= t0 - 1e-6 && t <= t1 + 1e-6;

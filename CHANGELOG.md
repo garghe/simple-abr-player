@@ -43,6 +43,9 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 ### Fixed
 
 - False **Silence** and **Frozen picture** alarms on test cards with a beep each second and a ticking clock (e.g. the DASH-IF livesim2 `testpic` streams): a short break in the condition now starts the hold time again, and a picture with any area clearly changing isn't frozen.
+- The dashboard's channel meters show the highest level of the last 1.5 s, so short sounds (beeps, speech) no longer leave them looking empty.
+- On live streams that count time from 1970 (e.g. livesim2), the timeline axis and the alarm log show clock time instead of huge hour counts like `498239:26:00`.
+- **Out of phase** is judged only when there is real audio (above −40 dBFS): the correlation of near-silence between beeps no longer counts, and quiet gaps no longer stop the alarm from raising on out-of-phase audio.
 - The active item in the Monitor navigation rail no longer crowds its label.
 - Tooltips no longer blink while the dashboard refreshes, and tab names show their explanation instead of repeating the name.
 - License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.

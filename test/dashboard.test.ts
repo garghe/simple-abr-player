@@ -92,3 +92,17 @@ describe('channel strip', () => {
     expect(channelStates([ch('L', -95), ch('R', -95)]).map((c) => c.flag)).toEqual([null, null]);
   });
 });
+
+describe('player time labels', () => {
+  it('shows live times as clock time and VOD times as positions', async () => {
+    const { mediaTimeLabel, clockTime } = await import('../src/ui/format');
+    // livesim-style live stream: media time counts from 1970.
+    const now = new Date(Date.UTC(2026, 10, 2, 23, 26, 54));
+    const media = now.getTime() / 1000;
+    const label = mediaTimeLabel(true, now, media);
+    expect(label(media - 30)).toBe(clockTime(new Date(now.getTime() - 30000)));
+    expect(label(media - 30)).not.toContain('498');
+    expect(mediaTimeLabel(false, now, media)(75)).toBe('01:15');
+    expect(mediaTimeLabel(true, null, media)(75)).toBe('01:15');
+  });
+});

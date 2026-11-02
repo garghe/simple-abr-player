@@ -380,7 +380,7 @@ The **Alarms** tab watches what the viewer gets, for leaving a channel running i
 | **Channel lost** | one channel (not LFE) below −60 dBFS while the others carry audio | 10 s |
 | **Loudness off target** | short-term loudness more than 6 LU from the target (EBU R128 −23 LUFS or ATSC A/85 −24 LKFS, from the Audio tab) | 20 s |
 | **True peak over limit** | above −1 dBTP (EBU) or −2 dBTP (ATSC) | instant |
-| **Out of phase** | L/R correlation below −0.3 | 5 s |
+| **Out of phase** | L/R correlation below −0.3, judged while there is audio above −40 dBFS | 5 s |
 
 Thresholds, hold times and which alarms are on are in **Alerts and thresholds**, with a sound and/or a browser notification when an alarm raises. The log keeps every alarm with start, duration and detail; **Export CSV** downloads it.
 
