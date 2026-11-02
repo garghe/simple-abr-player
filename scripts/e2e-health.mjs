@@ -41,6 +41,7 @@ const shot = async (page, name) => {
 
 async function open(sample) {
   const page = await browser.newPage({ viewport: { width: 1480, height: 1000 }, acceptDownloads: true });
+  await page.addInitScript(() => localStorage.setItem('sap.welcome.v1', 'hide'));
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   await page.goto(`${base}?url=${encodeURIComponent(`${base}samples/${sample}`)}`);
   await page.waitForFunction(() => window.abrPlayer?.loadedUrl, null, { timeout: 20000 });

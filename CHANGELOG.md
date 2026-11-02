@@ -31,6 +31,8 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 - **Inspect view** (default for VOD): summary cards under the player, throughput, a health score, loudness with per-channel meters (lost or quiet channels flagged), a DRM card for protected streams, next ad break with a programme/break strip, and the bitrate ladder (declared vs measured).
 - **Monitor view** (default for live): navigation rail, timeline under the player, health score, playback, loudness and a live events feed.
 - **Inspect | Monitor** switch; the choice is remembered per kind of stream (live/VOD), and Copy link includes the view.
+- **Welcome guide**: opens on the first visit (and from the **?** button or the `?` key) with what PlayProbe checks, how to use it and handy keys, plus a **Try the demo stream** button.
+- **Tooltips** that explain tabs, cards, health-score lines, table headers, Stats, DRM and loudness values, SCTE-35 fields, alarms and settings, on hover, keyboard focus or tap.
 
 ### Changed
 
@@ -39,6 +41,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 
 ### Fixed
 
+- The active item in the Monitor navigation rail no longer crowds its label.
 - License request headers set by the DRM module (PlayReady's `SOAPAction`) now pass through the CORS proxy.
 
 ## [1.0.0] - 2026-10-31

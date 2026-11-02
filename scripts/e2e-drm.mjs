@@ -190,6 +190,7 @@ async function playClearKey(page, drm, url = STREAM) {
 
 async function newPage() {
   const page = await browser.newPage({ viewport: { width: 1480, height: 900 } });
+  await page.addInitScript(() => localStorage.setItem('sap.welcome.v1', 'hide'));
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   await page.goto(base);
   await page.waitForFunction(() => window.abrPlayer?.proxy !== undefined && document.querySelector('#drm-btn span'));

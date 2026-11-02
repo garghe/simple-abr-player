@@ -26,6 +26,8 @@ import { STANDARDS } from './audio/loudness';
 import { audioPrefs } from './audio/prefs';
 import { Dashboard } from './ui/dashboard/dashboard';
 import { ViewModeSwitch, defaultView, parseView } from './ui/viewmode';
+import { installTooltips } from './ui/tooltip';
+import { WelcomeGuide, shouldShowWelcome } from './ui/welcome';
 
 const video = $('#video') as HTMLVideoElement;
 const playerEl = $('#player');
@@ -277,6 +279,27 @@ document.addEventListener('keydown', (e) => {
   action();
 });
 new Controls(ctrl, $('#controls'), playerEl, overlay, (e) => panel.showScteEvent(e), audio);
+
+// ------------------------------------------------------------ guide / tooltips
+
+installTooltips();
+const demoUrl = presets()[0].url;
+const guide = new WelcomeGuide({
+  version: APP_VERSION,
+  logo: `${import.meta.env.BASE_URL}logo.svg`,
+  onDemo: () => {
+    urlInput.value = demoUrl;
+    void load(demoUrl);
+  },
+});
+$('#help-btn').addEventListener('click', () => guide.show());
+document.addEventListener('keydown', (e) => {
+  const target = e.target as HTMLElement;
+  if (e.key !== '?' || target.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+  e.preventDefault();
+  guide.show();
+});
+if (shouldShowWelcome(window.localStorage)) guide.show();
 
 function renderOverlay() {
   if (!overlay.visible) return;

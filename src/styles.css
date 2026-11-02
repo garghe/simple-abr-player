@@ -462,7 +462,7 @@ textarea {
 /* Monitor: the navigation becomes a rail on the left. */
 body[data-view='monitor'] .layout {
   --stats-width: 400px;
-  padding-left: 100px;
+  padding-left: 108px;
 }
 
 /* Drag handle between the player and the side panel. */
@@ -1103,7 +1103,7 @@ body.resizing .player {
     left: 12px;
     top: calc(var(--header-h, 140px) + 20px);
     bottom: 20px;
-    width: 76px;
+    width: 84px;
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
@@ -1117,10 +1117,16 @@ body.resizing .player {
   body[data-view='monitor'] .tab {
     flex-direction: column;
     gap: 4px;
-    padding: 9px 2px 7px;
+    padding: 9px 4px 7px;
     font-size: 10.5px;
+    letter-spacing: -0.01em;
     border-radius: 12px;
     position: relative;
+  }
+  body[data-view='monitor'] .tab-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   body[data-view='monitor'] .tab svg {
     display: block;
@@ -1128,7 +1134,18 @@ body.resizing .player {
   body[data-view='monitor'] .tab[aria-selected='true'] {
     background: var(--panel-2);
     color: var(--text);
-    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  /* Active marker: a short pill just outside the button, clear of the label. */
+  body[data-view='monitor'] .tab[aria-selected='true']::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    width: 3px;
+    height: 22px;
+    margin-top: -11px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
   }
   body[data-view='monitor'] .tab .count {
     position: absolute;
@@ -2998,5 +3015,251 @@ ul.issues li {
   }
   .score-ring {
     align-self: center;
+  }
+}
+
+/* ------------------------------------------------------------ tooltips */
+
+.tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 300px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--panel);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* A dotted underline hints that a label explains itself. */
+table.kv th,
+.kv-grid small,
+.loud-tile small,
+.drm-facts .muted,
+.fact small {
+  text-decoration: underline dotted color-mix(in srgb, var(--muted) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------ help + welcome guide */
+
+.help-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+dialog.welcome {
+  width: min(840px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.45);
+  overflow: auto;
+}
+dialog.welcome::backdrop {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
+}
+.wl-hero {
+  position: relative;
+  padding: 26px 32px 16px;
+  background: var(--page-glow);
+}
+.wl-close {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+}
+.wl-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 40px;
+}
+.wl-brand h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.wl-version {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-2);
+  background: var(--accent-bg);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.wl-lead {
+  margin: 10px 0 0;
+  font-size: 15px;
+  max-width: 700px;
+  color: color-mix(in srgb, var(--text) 85%, var(--muted));
+}
+.wl-body {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 28px;
+  padding: 4px 32px 20px;
+}
+.wl-h {
+  margin: 14px 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.wl-caps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.wl-cap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.wl-cap b {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+.wl-cap i {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 12px;
+  color: #fff;
+}
+.wl-cap p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.wl-privacy {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.wl-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: s;
+  display: grid;
+  gap: 9px;
+}
+.wl-steps li {
+  counter-increment: s;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  font-size: 13px;
+}
+.wl-steps li::before {
+  content: counter(s);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--accent-2);
+  background: var(--accent-bg);
+}
+.wl-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  font: 600 11.5px var(--mono);
+  background: var(--badge-bg);
+}
+.wl-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12.5px;
+}
+.wl-key {
+  white-space: nowrap;
+}
+.wl-keys kbd {
+  font: 11px var(--mono);
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.wl-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 32px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.wl-foot label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wl-sp {
+  flex: 1;
+}
+@media (max-width: 720px) {
+  .wl-hero,
+  .wl-body,
+  .wl-foot {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .wl-body {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .wl-brand h2 {
+    font-size: 20px;
+  }
+  .wl-foot .wl-sp {
+    display: none;
+  }
+}
+@media (max-width: 460px) {
+  .wl-caps {
+    grid-template-columns: 1fr;
   }
 }

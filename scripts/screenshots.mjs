@@ -33,6 +33,7 @@ const ANGEL_ONE = 'https://storage.googleapis.com/shaka-demo-assets/angel-one/da
 async function open(url, { width = 1480, height = 900, view } = {}) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
+  await page.addInitScript(() => localStorage.setItem('sap.welcome.v1', 'hide'));
   await page.goto(`${base}?url=${encodeURIComponent(url)}${view ? `&view=${view}` : ''}`);
   await page.waitForFunction(() => window.abrPlayer?.loadedUrl, null, { timeout: 30000 });
   return page;
@@ -53,6 +54,16 @@ const play = (page, rate = 1) =>
     v.playbackRate = r;
     await v.play().catch(() => undefined);
   }, rate);
+
+// Welcome guide, as a first-time visitor sees it.
+{
+  const page = await browser.newPage({ viewport: { width: 1480, height: 900 }, deviceScaleFactor: 1 });
+  await page.goto(base);
+  await page.waitForSelector('dialog.welcome[open]');
+  await page.waitForTimeout(800);
+  await shot(page, 'welcome.png');
+  await page.close();
+}
 
 // 0. The two views: Inspect (DASH sample) and Monitor (alarms demo).
 {

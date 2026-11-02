@@ -20,6 +20,7 @@
 - [Build and run in production](#build-and-run-in-production)
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Inspect and Monitor views](#inspect-and-monitor-views)
+- [Welcome guide and tooltips](#welcome-guide-and-tooltips)
 - [Screenshots](#screenshots)
 - [Stream health and rendition alignment](#stream-health-and-rendition-alignment)
 - [Picture and sound alarms](#picture-and-sound-alarms)
@@ -46,6 +47,7 @@
 | **Load a stream** | Paste any `.mpd` or `.m3u8` URL, or pick a test stream (bundled offline sample, public VOD, live). Recent URLs are remembered, and a `?url=` link opens the app with that stream loaded. |
 | **Player controls** | Play/pause, a seek bar showing what's buffered and where the SCTE markers are, volume and mute, **audio track**, **subtitles**, **quality** (Auto or a fixed rendition), playback speed, picture-in-picture, fullscreen, and a jump-to-live button for live streams. |
 | **Inspect and Monitor views** | **Inspect** (default for VOD): the player with summary cards (format, video, audio, DRM, SCTE-35), throughput, a **health score**, loudness with per-channel meters, a DRM card for protected streams, the next ad break and the **bitrate ladder**. **Monitor** (default for live): a navigation rail, the player with the **timeline** under it, and health, playback, loudness and a live **events feed**. Switch with **Inspect \| Monitor**; see [the views](#inspect-and-monitor-views). |
+| **Welcome guide and tooltips** | A short guide opens on the first visit (and from **?** in the header or the `?` key). Hovering over a label or value explains it. See [Welcome guide and tooltips](#welcome-guide-and-tooltips). |
 | **Stats** | Format, live or VOD, latency, how far back you can rewind (live), wall-clock playhead, current rendition, codecs, frame rate, SDR or HDR, stream bitrate and estimated bandwidth, buffer, dropped frames, stalls, startup timings. Plus a live graph of bandwidth and buffer. |
 | **Stats: Tracks** | Every video rendition, audio track (language, roles, codec, channels, sample rate), subtitle/caption track, thumbnail track and quality option, with the active ones highlighted. |
 | **Audio meters** | Per-channel level meters on the video (stereo or 5.1), with short-term loudness. On by default; toggle with the **Meters** button or `a`. |
@@ -241,6 +243,24 @@ The header holds the logo with the version, the navigation, **Copy link**, **Exp
 
 **Monitor view (stream health & alarms demo, light theme)**
 ![Monitor view](docs/screenshots/monitor.png)
+
+---
+
+## Welcome guide and tooltips
+
+**Welcome guide.** The first time PlayProbe opens, a short guide explains what the tool is, what it checks and how to use it (load a stream, pick a view, open the detail, DRM and proxy, Copy link and Export, handy keys). **Try the demo stream** loads the bundled DASH sample.
+
+- Reopen it any time with the **?** button in the header or the `?` key.
+- **Don't show this when PlayProbe opens** is ticked by default, so the guide opens by itself only once. Untick it before closing to see it on every visit. The choice is kept in browser storage (`sap.welcome.v1`).
+- Close it with **Get started**, ✕, `Esc` or a click outside it.
+
+**Tooltips.** Labels across the app explain themselves: tab names, card titles, dashboard facts and health-score lines, table headers, Stats and DRM values, loudness readings, SCTE-35 fields and builder inputs, alarm names and DRM settings.
+
+- Hover (about a third of a second), focus with the keyboard, or tap a label on a touch screen. `Esc` or scrolling hides it.
+- Labels with an explanation have a dotted underline in the summary tables and cards.
+- The texts live in one place, `src/ui/glossary.ts`, keyed by the label as shown. A key can carry a context (`scte:health`, `fact:audio`) when the same word means different things in different places.
+
+![Welcome guide](docs/screenshots/welcome.png)
 
 ---
 
@@ -583,6 +603,7 @@ flowchart LR
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
 | `src/ui/dashboard/*`, `src/ui/viewmode.ts` | The Inspect and Monitor dashboards (cards, timeline under the player, facts), their data (health score, events feed, bitrate ladder) as pure functions, and the view switch with its remembered defaults. |
+| `src/ui/welcome.ts`, `tooltip.ts`, `glossary.ts` | The welcome guide (a native `<dialog>`, shown until dismissed), one shared tooltip for the whole page found by delegated hover/focus, and the explanation of each label. |
 | `src/ui/theme.ts` | System / Light / Dark toggle. Colours are CSS custom properties switched by `data-theme` on `<html>` (or the OS setting in System mode); a small inline script in `index.html` applies the saved theme before the page first appears. |
 | `src/drm/settings.ts` | DRM settings model (generic: URLs, headers, formats), Widevine and PlayReady security levels, profiles and storage. |
 | `src/drm/transform.ts` | Generic license request wrapping (raw / base64 / form / JSON template) and response unwrapping (auto-detect / base64 / `<ckc>` / JSON field), FairPlay content ID. |
@@ -647,7 +668,7 @@ sequenceDiagram
 │   ├── media/                 Segment reader (fMP4 init and fragments, MPEG-2 TS)
 │   ├── stream/                Stream health checks, MPD timelines, rendition alignment
 │   ├── alarms/                Picture and sound alarms, picture sampler
-│   ├── ui/                    Controls, seek bar, chart, view switch, helpers
+│   ├── ui/                    Controls, seek bar, chart, view switch, welcome guide, tooltips and glossary, helpers
 │   │   ├── dashboard/         Inspect and Monitor dashboards, health score, events feed, bitrate ladder
 │   │   ├── scte/              SCTE-35 views: health, timeline, structure, ad insertion, monitor, builder
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
@@ -749,6 +770,7 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | `n` / `p` | Next / previous SCTE marker |
 | `b` | Jump to a few seconds before the next ad break (3–30 s, set in the SCTE-35 tab) |
 | `s` | Skip the current ad break (to its advertised end or its IN marker) |
+| `?` | Open the welcome guide |
 
 ---
 
