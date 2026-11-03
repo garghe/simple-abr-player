@@ -6,7 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendition alignment, picture and sound alarms) and 1.4.0 (new design with a dashboard).
+## [1.4.0] - 2026-11-03
+
+PlayReady, the SCTE-35 tools, stream health with rendition alignment, picture and sound alarms, and the new design with a dashboard, released together (they were developed as 1.1 to 1.4).
 
 ### Added
 
@@ -80,5 +82,6 @@ First release.
 - DRM playback no longer shows a blank picture because of rounded corners and blurred overlays; blank video on DisplayLink screens is documented.
 - Frame counters show 0 instead of NaN before a stream loads.
 
-[Unreleased]: https://github.com/garghe/simple-abr-player/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/garghe/simple-abr-player/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/garghe/simple-abr-player/compare/v1.0.0...v1.4.0
 [1.0.0]: https://github.com/garghe/simple-abr-player/releases/tag/v1.0.0
