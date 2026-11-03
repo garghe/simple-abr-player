@@ -1,4 +1,5 @@
 import { h } from './dom';
+import { CONTACT_EMAIL, LICENSE_URL } from '../version';
 
 export const WELCOME_KEY = 'sap.welcome.v1';
 
@@ -101,6 +102,12 @@ export class WelcomeGuide {
             key([kbd('?')], 'this guide'),
           ),
         ),
+      ),
+      h(
+        'p',
+        { class: 'wl-about' },
+        h('span', null, 'Free and open source under the ', h('a', { href: LICENSE_URL, target: '_blank', rel: 'noopener' }, 'MIT License'), '.'),
+        h('span', null, 'Questions, bugs or ideas? ', h('a', { href: `mailto:${CONTACT_EMAIL}?subject=PlayProbe` }, CONTACT_EMAIL)),
       ),
       h(
         'div',

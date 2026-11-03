@@ -7,6 +7,8 @@ export const APP_VERSION = __APP_VERSION__;
 export const RELEASE_DATE = __RELEASE_DATE__;
 
 const CHANGELOG_URL = 'https://github.com/garghe/simple-abr-player/blob/main/CHANGELOG.md';
+export const LICENSE_URL = 'https://github.com/garghe/simple-abr-player/blob/main/LICENSE';
+export const CONTACT_EMAIL = 'garghe@gmail.com';
 
 /** "31 Oct 2026" (UTC, so it reads the same everywhere). */
 export function formatReleaseDate(iso: string): string {

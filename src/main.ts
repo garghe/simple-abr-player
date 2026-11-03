@@ -34,6 +34,7 @@ const playerEl = $('#player');
 const urlInput = $('#url') as HTMLInputElement;
 const presetSel = $('#presets') as HTMLSelectElement;
 renderVersion($('#app-version') as HTMLAnchorElement);
+$('#footer-version').textContent = `v${APP_VERSION}`;
 const historyList = $('#url-history');
 const settingsBtn = $('#settings-btn');
 const settingsPanel = $('#settings');
