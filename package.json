@@ -20,7 +20,8 @@
     "sample:issues": "node scripts/make-issues-sample.mjs",
     "test:e2e:scte": "node scripts/e2e-scte.mjs",
     "sample:alarms": "node scripts/make-alarms-sample.mjs",
-    "test:e2e:health": "node scripts/e2e-health.mjs"
+    "test:e2e:health": "node scripts/e2e-health.mjs",
+    "test:ui": "node scripts/ui-audit.mjs"
   },
   "dependencies": {
     "shaka-player": "^5.2.13"

@@ -229,7 +229,7 @@ When playprobe.xyz is shared, social sites show a card with the logo, name and t
 | --- | --- |
 | `https://<your-worker>/` | The player |
 | `https://<your-worker>/samples/scte-demo/dash.mpd` | The bundled sample MPD |
-| `https://<your-worker>/__proxy/health` | `{"status":"ok","kind":"cloudflare","segments":false}` when the proxy is on; `404 disabled` when off |
+| `https://<your-worker>/__proxy/health` | `{"status":"ok","kind":"cloudflare","segments":false}` when the proxy is on; `{"status":"disabled"}` when off |
 | `https://<your-worker>/__proxy/https/<host>/<path>/seg.m4s` | `403` while `PROXY_SEGMENTS` is `false` (guardrail working) |
 
 To try the Worker locally with the same runtime Cloudflare uses: `npm run build && npx wrangler dev`. Add `--var PROXY_ENABLED:true` to test the proxy.

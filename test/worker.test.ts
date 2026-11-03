@@ -15,7 +15,8 @@ describe('Cloudflare Worker', () => {
 
   it('reports the proxy as unavailable when disabled', async () => {
     const health = await worker.fetch(req('/__proxy/health'), env({ PROXY_ENABLED: 'false' }));
-    expect(health.status).toBe(404);
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ status: 'disabled' });
     const res = await worker.fetch(req('/__proxy/https/cdn.example.com/a.m3u8'), env({ PROXY_ENABLED: 'false' }));
     expect(res.status).toBe(404);
   });

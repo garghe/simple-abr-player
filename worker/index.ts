@@ -56,7 +56,8 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
   // The app calls /health at start-up to decide whether to offer the proxy.
   const segments = env.PROXY_SEGMENTS === 'true';
   if (url.pathname === `${PREFIX}health`) {
-    if (!enabled) return text('disabled', 404);
+    // 200, not 404: the app asks on every visit, and a 404 shows as an error in the browser console.
+    if (!enabled) return text(JSON.stringify({ status: 'disabled' }), 200, { 'Content-Type': 'application/json' });
     const health: ProxyHealth = { status: 'ok', kind: 'cloudflare', segments };
     return text(JSON.stringify(health), 200, { 'Content-Type': 'application/json' });
   }

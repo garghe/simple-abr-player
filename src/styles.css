@@ -3180,3 +3180,10 @@ dialog.welcome::backdrop {
   border-top: 1px solid var(--row-line);
   line-height: 1.5;
 }
+
+.player-message .player-message-detail {
+  margin-top: 8px;
+  font: 11px/1.4 var(--mono);
+  color: color-mix(in srgb, #fecaca 70%, transparent);
+  overflow-wrap: anywhere;
+}

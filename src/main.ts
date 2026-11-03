@@ -1,6 +1,7 @@
 import './styles.css';
 import { AudioEngine } from './audio/engine';
-import { PlayerController, describeShakaError } from './player/controller';
+import { PlayerController, shakaCodeName } from './player/controller';
+import { explainError } from './player/errors';
 import { AudioOverlay } from './ui/audio/overlay';
 import { drmHint, drmUnavailableHint } from './drm/errors';
 import { isDrmConfigured, normaliseDrm } from './drm/settings';
@@ -65,14 +66,20 @@ function showToast(text: string) {
   toast.dataset.timer = String(window.setTimeout(() => (toast.hidden = true), 2500));
 }
 
-function showMessage(title: string | null, body = '', isError = false) {
+function showMessage(title: string | null, body = '', isError = false, detail = '') {
   if (!title) {
     message.hidden = true;
     return;
   }
   message.hidden = false;
   message.classList.toggle('error', isError);
-  clear(message, h('div', null, h('strong', null, title), body ? h('p', null, body) : ''));
+  clear(message, h('div', null, h('strong', null, title), body ? h('p', null, body) : '', detail ? h('p', { class: 'player-message-detail' }, detail) : ''));
+}
+
+/** A load or playback failure: what went wrong in plain words, what to try, then the player's code. */
+function showFailure(title: string, err: unknown, url: string) {
+  const { summary, detail } = explainError(err, shakaCodeName);
+  showMessage(title, [summary, hintFor(err, url)].filter(Boolean).join(' '), true, detail);
 }
 
 // ------------------------------------------------------------------ settings
@@ -364,7 +371,7 @@ ctrl.on('error', (err) => {
   const e = err as { severity?: number } | undefined;
   // Severity 2 = CRITICAL: playback stopped.
   if (e?.severity === 2) {
-    showMessage('Playback error', `${describeShakaError(err)}. ${hintFor(err, ctrl.loadedUrl ?? '')}`, true);
+    showFailure('Playback error', err, ctrl.loadedUrl ?? '');
   }
 });
 
@@ -376,14 +383,14 @@ function hintFor(err: unknown, url: string): string {
   if (location.protocol === 'https:' && url.startsWith('http:')) {
     hints.push('This page is served over HTTPS, so the browser blocks http:// streams (mixed content). Run the app locally with `npm run dev`.');
   }
-  if (code === 1002 || code === 1001) {
+  if (code === 1002 || (code === 1001 && [0, 403].includes(Number((err as { data?: unknown[] }).data?.[1])))) {
     hints.push(
       ctrl.proxyAvailable
         ? 'The request failed. If the server does not send CORS headers, set CORS proxy to "Always" in the settings (⚙).'
         : 'The request failed, most often because the server does not send CORS headers. Run the app with `npm run dev` to use the built-in CORS proxy.',
     );
   }
-  if (code === 4032 || code === 4040) hints.push('The stream uses codecs this browser cannot decode — see the Device tab.');
+  if (code === 4032 || code === 4040) hints.push('The Device tab shows what this browser can decode.');
   const drm = code && code >= 6000 && code < 7000 && ctrl.unavailableDrm ? drmUnavailableHint(ctrl.unavailableDrm) : drmHint(err);
   if (drm) hints.push(drm);
   if (drm || (code && code >= 6000 && code < 7000)) hints.push('Details are in the DRM tab.');
@@ -424,7 +431,7 @@ async function load(url: string) {
     }
   } catch (err) {
     playerEl.classList.remove('has-media');
-    showMessage('Could not load the stream', `${describeShakaError(err)}. ${hintFor(err, url)}`, true);
+    showFailure('Could not load the stream', err, url);
   } finally {
     spinner.hidden = true;
     loading = false;

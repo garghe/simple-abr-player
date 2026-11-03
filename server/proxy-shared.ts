@@ -85,7 +85,8 @@ export function isHostAllowed(host: string, patterns: string[]): boolean {
 
 /** JSON returned by /__proxy/health so the app knows what the proxy allows. */
 export interface ProxyHealth {
-  status: 'ok';
+  /** 'disabled' = a deployment without the proxy (answered with 200 so browsers log no error). */
+  status: 'ok' | 'disabled';
   /** 'local' = Vite dev/preview server, 'cloudflare' = deployed Worker. */
   kind: 'local' | 'cloudflare';
   /** Whether media segments may be proxied (manifests/playlists always may). */

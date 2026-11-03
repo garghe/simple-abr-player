@@ -148,6 +148,11 @@ const MAX_SAMPLES = 180;
 /** shaka.util.Error codes that indicate a fetch failed (CORS shows up as these). */
 const NETWORK_ERROR_CODES = new Set([1001, 1002, 1003]);
 
+/** Name of a Shaka error code, e.g. 1001 → BAD_HTTP_STATUS. */
+export function shakaCodeName(code: number): string | undefined {
+  return Object.entries(shaka.util.Error.Code).find(([, v]) => v === code)?.[0];
+}
+
 export function describeShakaError(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err) {
     const e = err as shaka.util.Error;
