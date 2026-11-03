@@ -68,7 +68,18 @@ export interface FrameStats {
   change: number | null;
   /** Largest change of any one pixel, 0–1 (null for the first): a ticking clock on a still card. */
   maxChange?: number | null;
+  /** Brightest pixel outside the four corners (where channel logos sit), 0–1. */
+  peak?: number;
 }
+
+/**
+ * A picture with anything brighter than this (0–1 luma) outside its corners
+ * shows something (stars, a ship, a caption), so it is dark, not black, even
+ * when its average is low. Black frames measure well under 1 %.
+ */
+export const BLACK_DETAIL = 0.1;
+/** Share of the width and height treated as a corner (logos), ignored for BLACK_DETAIL. */
+const CORNER = 0.2;
 
 /**
  * A picture with any one area changing this much (0–1 luma, on the 64×36
@@ -77,9 +88,14 @@ export interface FrameStats {
  */
 export const LOCAL_CHANGE = 0.12;
 
-/** BT.709 luma of an RGBA buffer, plus the change against the previous one. */
-export function frameStats(rgba: Uint8ClampedArray, previous: Float32Array | null): { stats: FrameStats; luma: Float32Array } {
+/** BT.709 luma of an RGBA buffer (`width` pixels wide), plus the change against the previous one. */
+export function frameStats(rgba: Uint8ClampedArray, previous: Float32Array | null, width = Math.sqrt(rgba.length / 4)): { stats: FrameStats; luma: Float32Array } {
   const n = rgba.length / 4;
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(n / w));
+  const cw = Math.floor(w * CORNER);
+  const ch = Math.floor(h * CORNER);
+  let peak = 0;
   const luma = new Float32Array(n);
   let sum = 0;
   let diff = 0;
@@ -89,13 +105,17 @@ export function frameStats(rgba: Uint8ClampedArray, previous: Float32Array | nul
     const y = (0.2126 * rgba[i * 4] + 0.7152 * rgba[i * 4 + 1] + 0.0722 * rgba[i * 4 + 2]) / 255;
     luma[i] = y;
     sum += y;
+    const x = i % w;
+    const row = Math.floor(i / w);
+    const corner = (x < cw || x >= w - cw) && (row < ch || row >= h - ch);
+    if (!corner && y > peak) peak = y;
     if (compare) {
       const d = Math.abs(y - previous[i]);
       diff += d;
       if (d > max) max = d;
     }
   }
-  return { stats: { luma: sum / n, change: compare ? diff / n : null, maxChange: compare ? max : null }, luma };
+  return { stats: { luma: sum / n, change: compare ? diff / n : null, maxChange: compare ? max : null, peak }, luma };
 }
 
 interface Condition {
@@ -215,11 +235,13 @@ export class AlarmMonitor {
     this.last.luma = stats.luma;
     this.last.change = stats.change;
     const s = this.settings;
-    this.track('black', stats.luma * 100 < s.blackLevel, now, media, () => `Average luma ${(stats.luma * 100).toFixed(1)} % (below ${s.blackLevel} %)`);
+    // Black: dark on average and nothing visible (a dark scene with stars or a ship is not black).
+    const black = stats.luma * 100 < s.blackLevel && (stats.peak ?? 0) < BLACK_DETAIL;
+    this.track('black', black, now, media, () => `Average luma ${(stats.luma * 100).toFixed(1)} % (below ${s.blackLevel} %), nothing brighter than ${BLACK_DETAIL * 100} % outside the corners`);
     // Frozen: time moves on but the picture doesn't change. Not judged while the playhead is stuck (buffering).
     // Any area moving clearly (e.g. a clock on a test card) means the picture isn't frozen.
     const still = stats.change !== null && stats.change * 100 < s.freezeLevel && (stats.maxChange ?? 0) < LOCAL_CHANGE;
-    const frozen = stats.change === null || !advancing ? null : still && stats.luma * 100 >= s.blackLevel;
+    const frozen = stats.change === null || !advancing ? null : still && !black;
     this.track('freeze', frozen, now, media, () => `Picture change ${((stats.change ?? 0) * 100).toFixed(3)} % between frames while playing`);
   }
 

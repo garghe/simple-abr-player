@@ -61,7 +61,7 @@ export class PictureSampler {
       return;
     }
     this.state = 'ok';
-    const { stats, luma } = frameStats(data, this.previous);
+    const { stats, luma } = frameStats(data, this.previous, W);
     const advancing = this.lastTime >= 0 && v.currentTime > this.lastTime + 0.05;
     this.previous = luma;
     this.lastTime = v.currentTime;

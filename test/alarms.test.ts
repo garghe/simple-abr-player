@@ -88,6 +88,18 @@ describe('picture alarms', () => {
     expect(c.stats.maxChange).toBeCloseTo(0, 6);
   });
 
+  it('a dark scene with visible detail is not black; a logo in a corner does not stop black', () => {
+    const m = new AlarmMonitor();
+    run(m, 10, 0, (now) => m.picture({ luma: 0.01, change: 0.01, peak: 0.5 }, now, now / 1000, true));
+    expect(m.active.has('black')).toBe(false);
+    // 32×18 black frame with a bright 2×2 logo top-left (a corner) → still black.
+    const logo = new Uint8ClampedArray(Array.from({ length: 576 }, (_, i) => ((i % 32) < 2 && i < 64 ? 255 : 0)).flatMap((y) => [y, y, y, 255]));
+    expect(frameStats(logo, null, 32).stats.peak).toBe(0);
+    // The same spot in the middle (a star, a ship) counts.
+    const star = new Uint8ClampedArray(Array.from({ length: 576 }, (_, i) => (i === 9 * 32 + 16 ? 255 : 0)).flatMap((y) => [y, y, y, 255]));
+    expect(frameStats(star, null, 32).stats.peak).toBeCloseTo(1, 5);
+  });
+
   it('respects disabled alarms', () => {
     const m = new AlarmMonitor();
     m.settings.enabled.black = false;

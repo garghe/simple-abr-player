@@ -43,6 +43,7 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 
 ### Fixed
 
+- False **Black picture** alarms on dark scenes (e.g. a starfield in Angel One): the picture must also show nothing brighter than 10 % outside its corners.
 - False **Silence** and **Frozen picture** alarms on test cards with a beep each second and a ticking clock (e.g. the DASH-IF livesim2 `testpic` streams): a short break in the condition now starts the hold time again, and a picture with any area clearly changing isn't frozen.
 - The dashboard's channel meters show the highest level of the last 1.5 s, so short sounds (beeps, speech) no longer leave them looking empty.
 - On live streams that count time from 1970 (e.g. livesim2), the timeline axis and the alarm log show clock time instead of huge hour counts like `498239:26:00`.

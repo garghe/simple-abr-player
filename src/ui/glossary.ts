@@ -171,7 +171,7 @@ export const GLOSSARY: Record<string, string> = {
   alarm: 'Which condition was detected.',
   threshold: 'Level at which the condition counts.',
   'for at least': 'How long (in content time) the condition must last without a break before the alarm raises.',
-  'black picture': 'Raises when the average brightness stays below the threshold.',
+  'black picture': 'Raises when the picture stays dark with nothing visible in it (a channel logo in a corner is ignored). A dark scene with stars is not black.',
   'frozen picture': 'Raises when the picture stops changing while the playhead keeps moving. A clock ticking on a still card counts as moving.',
   silence: 'Raises when every channel stays below the silence level.',
   'channel lost': 'Raises when one channel (not LFE) is silent while the others carry audio.',

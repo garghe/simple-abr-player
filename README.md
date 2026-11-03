@@ -374,7 +374,7 @@ The **Alarms** tab watches what the viewer gets, for leaving a channel running i
 
 | Alarm | Default threshold | Hold |
 | --- | --- | --- |
-| **Black picture** | average luma below 6 % | 2 s |
+| **Black picture** | average luma below 6 % and nothing brighter than 10 % outside the corners (a dark scene with stars is not black; a channel logo in a corner doesn't stop it) | 2 s |
 | **Frozen picture** | average change between frames below 0.2 % while the playhead moves, with no area changing clearly (a ticking clock on a still test card counts as moving) | 5 s |
 | **Silence** | every channel below −60 dBFS | 5 s |
 | **Channel lost** | one channel (not LFE) below −60 dBFS while the others carry audio | 10 s |
