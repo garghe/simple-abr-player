@@ -5,7 +5,7 @@
  */
 export const GLOSSARY: Record<string, string> = {
   // ------------------------------------------------------------- header / views
-  dashboard: 'Summary of the stream: Inspect cards or, in Monitor, the live operations view.',
+  dashboard: 'Summary of the stream: health score, loudness, DRM and ad breaks; plus the events feed and timeline for live streams, or throughput and the bitrate ladder on demand.',
   stats: 'Playback statistics: format, renditions, buffer, bandwidth, frames and start-up timings, with a bandwidth/buffer graph.',
   tracks: 'Every video rendition, audio track, subtitle track and thumbnail track in the stream; the active ones are highlighted.',
   audio: 'Channel meters and loudness to EBU R128 or ATSC A/85, measured from the audio the stream actually carries.',
@@ -17,10 +17,8 @@ export const GLOSSARY: Record<string, string> = {
   manifest: 'The raw MPD and HLS playlists exactly as fetched, with ad-related lines highlighted.',
   device: 'What this browser and screen support: codecs, DRM systems and security levels, HDCP, HDR.',
   log: 'Loading steps, quality switches, track changes, stalls, warnings and errors.',
-  inspect: 'Inspect view: a summary of the stream with cards. The default for VOD.',
-  monitor: 'Monitor view: timeline under the player and a live events feed, for watching a channel. The default for live.',
   'probe stream': 'Load the URL and start checking the stream.',
-  'copy link': 'Copy a link that opens this stream in the current view (DRM settings are never included).',
+  'copy link': 'Copy a link that opens this stream (DRM settings are never included).',
   export: 'Download everything PlayProbe measured as JSON: stats, tracks, SCTE-35, health, alarms, network and log. No DRM tokens.',
 
   // ----------------------------------------------------------------- dashboard

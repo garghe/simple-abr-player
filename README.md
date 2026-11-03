@@ -6,9 +6,9 @@
 
 <p align="center"><strong>Play, inspect and monitor streams:</strong> DASH · HLS · DRM · SCTE-35 · <a href="https://playprobe.xyz">playprobe.xyz</a></p>
 
-**PlayProbe** is a web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine**, **PlayReady** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and checks it as it goes: stream health and rendition alignment, **SCTE-35 ad markers** decoded field by field, loudness and picture/sound alarms, DRM licence exchanges, network and buffer behaviour, the raw manifests and device capabilities. Two views: **Inspect**, a summary of the stream, and **Monitor**, for watching a live channel.
+**PlayProbe** is a web player for **MPEG-DASH and HLS streams**, clear or protected with **Widevine**, **PlayReady** or **FairPlay**, built for stream engineers. It plays any DASH or HLS URL and checks it as it goes: stream health and rendition alignment, **SCTE-35 ad markers** decoded field by field, loudness and picture/sound alarms, DRM licence exchanges, network and buffer behaviour, the raw manifests and device capabilities. A single dashboard sums the stream up and adapts to it: an events feed and timeline for live channels, throughput and the bitrate ladder on demand.
 
-![Inspect view](docs/screenshots/inspect.png)
+![PlayProbe dashboard](docs/screenshots/dashboard.png)
 
 ---
 
@@ -19,7 +19,7 @@
 - [Playing HTTPS streams locally (CORS proxy)](#playing-https-streams-locally-cors-proxy)
 - [Build and run in production](#build-and-run-in-production)
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
-- [Inspect and Monitor views](#inspect-and-monitor-views)
+- [Dashboard](#dashboard)
 - [Welcome guide and tooltips](#welcome-guide-and-tooltips)
 - [Screenshots](#screenshots)
 - [Stream health and rendition alignment](#stream-health-and-rendition-alignment)
@@ -46,7 +46,7 @@
 | --- | --- |
 | **Load a stream** | Paste any `.mpd` or `.m3u8` URL, or pick a test stream (bundled offline sample, public VOD, live). Recent URLs are remembered, and a `?url=` link opens the app with that stream loaded. |
 | **Player controls** | Play/pause, a seek bar showing what's buffered and where the SCTE markers are, volume and mute, **audio track**, **subtitles**, **quality** (Auto or a fixed rendition), playback speed, picture-in-picture, fullscreen, and a jump-to-live button for live streams. |
-| **Inspect and Monitor views** | **Inspect** (default for VOD): the player with summary cards (format, video, audio, DRM, SCTE-35), throughput, a **health score**, loudness with per-channel meters, a DRM card for protected streams, the next ad break and the **bitrate ladder**. **Monitor** (default for live): a navigation rail, the player with the **timeline** under it, and health, playback, loudness and a live **events feed**. Switch with **Inspect \| Monitor**; see [the views](#inspect-and-monitor-views). |
+| **Dashboard** | Summary cards under the player (format, video, audio, DRM, SCTE-35), a **health score**, loudness with per-channel meters, a DRM card for protected streams and the next ad break. Live streams add the **timeline** under the player and a live **events feed**; on-demand streams the throughput graph and the **bitrate ladder**. See [Dashboard](#dashboard). |
 | **Welcome guide and tooltips** | A short guide opens on the first visit (and from **?** in the header or the `?` key). Hovering over a label or value explains it. See [Welcome guide and tooltips](#welcome-guide-and-tooltips). |
 | **Stats** | Format, live or VOD, latency, how far back you can rewind (live), wall-clock playhead, current rendition, codecs, frame rate, SDR or HDR, stream bitrate and estimated bandwidth, buffer, dropped frames, stalls, startup timings. Plus a live graph of bandwidth and buffer. |
 | **Stats: Tracks** | Every video rendition, audio track (language, roles, codec, channels, sample rate), subtitle/caption track, thumbnail track and quality option, with the active ones highlighted. |
@@ -236,30 +236,28 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 
 ---
 
-## Inspect and Monitor views
+## Dashboard
 
-The header holds the logo with the version, the navigation, **Copy link**, **Export** and the theme; under it, the load bar: format chip, URL, test streams, DRM, proxy settings, **Probe stream** and the **Inspect | Monitor** switch.
+The header holds the logo with the version, the navigation, **Copy link**, **Export**, the guide (**?**) and the theme; under it, the load bar: format chip, URL, test streams, DRM, proxy settings and **Probe stream**.
 
-| | Inspect | Monitor |
-| --- | --- | --- |
-| **For** | Checking a stream: a new channel, a delivery, a support ticket, a report | Watching a live channel, e.g. in an operations room |
-| **Default** | VOD streams | Live streams |
-| **Navigation** | Pills in the header | A rail on the left (icons + labels) |
-| **Under the player** | Summary cards (click one for its tab) and throughput & buffer | The timeline: breaks, programme and ad segmentation, inserted ads, quality, health issues, stalls and alarms |
-| **Dashboard** | Health score, loudness with a meter per channel (a lost or much quieter channel is flagged), DRM (system, security level, keys, licence, last request; protected streams only), next ad break with a programme/break strip, bitrate ladder (declared and measured) | Health score, playback, loudness against the target with channel meters, events feed (SCTE-35 markers, alarms, quality switches, warnings) |
+There is one layout. Its cards follow the stream, so there is nothing to switch:
+
+| | Every stream | Live streams add | On-demand streams add |
+| --- | --- | --- | --- |
+| **Under the player** | Summary cards: format, video, audio, DRM, SCTE-35 (click one for its tab) | The **timeline**: breaks, programme and ad segmentation, inserted ads, quality, health issues, stalls and alarms | **Throughput & buffer** graph |
+| **Dashboard tab** | **Health score**, **loudness** with a meter per channel (a lost or much quieter channel is flagged), **DRM** (protected streams only: system, security level, keys, licence, last request), **next ad break** with a programme/break strip | **Events feed**: SCTE-35 markers, alarms, quality switches, warnings, newest first | **Bitrate ladder**: declared and measured bitrate per rendition |
 
 - **Health score:** 100 minus points for problems in each area: stream & segments, rendition alignment, SCTE-35 signalling, picture & sound (active alarms weigh most) and DRM. Errors cost 10, warnings 4, capped per area. Each line opens its tab.
-- **Choosing the view:** live streams open in Monitor, VOD in Inspect. Switching while a stream plays remembers the choice for that kind of stream (e.g. always Inspect for live). **Copy link** includes the view (`&view=monitor`), so a shared link opens the same way.
-- **Detail tabs:** Stats, Tracks, Audio, DRM, SCTE-35, Health, Alarms, Network, Manifest, Device and Log replace the dashboard in the side panel; the player keeps playing. Both views work in the light and dark themes and on phones (everything stacks in one column).
+- **Detail tabs:** Stats, Tracks, Audio, DRM, SCTE-35, Health, Alarms, Network, Manifest, Device and Log replace the dashboard in the side panel; the player keeps playing. It works in the light and dark themes and on phones (everything stacks in one column).
 
-**Monitor view (stream health & alarms demo, light theme)**
-![Monitor view](docs/screenshots/monitor.png)
+**Live stream** (a live copy of the bundled sample): timeline under the player, events feed in the dashboard.
+![Dashboard on a live stream](docs/screenshots/dashboard-live.png)
 
 ---
 
 ## Welcome guide and tooltips
 
-**Welcome guide.** The first time PlayProbe opens, a short guide explains what the tool is, what it checks and how to use it (load a stream, pick a view, open the detail, DRM and proxy, Copy link and Export, handy keys). **Try the demo stream** loads the bundled DASH sample.
+**Welcome guide.** The first time PlayProbe opens, a short guide explains what the tool is, what it checks and how to use it (load a stream, what the dashboard shows, open the detail, DRM and proxy, Copy link and Export, handy keys). **Try the demo stream** loads the bundled DASH sample.
 
 - Reopen it any time with the **?** button in the header or the `?` key.
 - **Don't show this when PlayProbe opens** is ticked by default, so the guide opens by itself only once. Untick it before closing to see it on every visit. The choice is kept in browser storage (`sap.welcome.v1`).
@@ -336,7 +334,7 @@ The header holds the logo with the version, the navigation, **Copy link**, **Exp
 **Settings and Log**: CORS proxy mode, custom headers, low-latency mode.
 ![Settings](docs/screenshots/settings.png)
 
-**Light theme**: the Inspect dashboard with the theme button set to Light.
+**Light theme**: the dashboard with the theme button set to Light.
 ![Light theme](docs/screenshots/light.png)
 
 **Phone layout**: navigation scrolls in the header, controls sit under the video, the summary cards and dashboard stack below.
@@ -613,7 +611,7 @@ flowchart LR
 | `src/ui/controls.ts`, `seekbar.ts` | Control bar, track selectors, keyboard shortcuts, and the seek bar with buffered regions and SCTE markers and breaks. |
 | `src/ui/stats/*` | One file per tab. Only the visible tab updates (at most once per animation frame). |
 | `src/ui/splitter.ts` | Drag handle that resizes the stats panel against the player (mouse, touch, keyboard), remembered in browser storage. |
-| `src/ui/dashboard/*`, `src/ui/viewmode.ts` | The Inspect and Monitor dashboards (cards, timeline under the player, facts), their data (health score, events feed, bitrate ladder) as pure functions, and the view switch with its remembered defaults. |
+| `src/ui/dashboard/*` | The dashboard (cards that follow the stream, the summary cards and timeline or throughput under the player) and its data (health score, events feed, bitrate ladder) as pure functions. |
 | `src/ui/welcome.ts`, `tooltip.ts`, `glossary.ts` | The welcome guide (a native `<dialog>`, shown until dismissed), one shared tooltip for the whole page found by delegated hover/focus, and the explanation of each label. |
 | `src/ui/theme.ts` | System / Light / Dark toggle. Colours are CSS custom properties switched by `data-theme` on `<html>` (or the OS setting in System mode); a small inline script in `index.html` applies the saved theme before the page first appears. |
 | `src/drm/settings.ts` | DRM settings model (generic: URLs, headers, formats), Widevine and PlayReady security levels, profiles and storage. |
@@ -679,8 +677,8 @@ sequenceDiagram
 │   ├── media/                 Segment reader (fMP4 init and fragments, MPEG-2 TS)
 │   ├── stream/                Stream health checks, MPD timelines, rendition alignment
 │   ├── alarms/                Picture and sound alarms, picture sampler
-│   ├── ui/                    Controls, seek bar, chart, view switch, welcome guide, tooltips and glossary, helpers
-│   │   ├── dashboard/         Inspect and Monitor dashboards, health score, events feed, bitrate ladder
+│   ├── ui/                    Controls, seek bar, chart, welcome guide, tooltips and glossary, helpers
+│   │   ├── dashboard/         Dashboard cards, health score, events feed, bitrate ladder
 │   │   ├── scte/              SCTE-35 views: health, timeline, structure, ad insertion, monitor, builder
 │   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
 │   ├── presets.ts             Test stream list

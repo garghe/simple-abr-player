@@ -363,30 +363,6 @@ code,
   white-space: nowrap;
 }
 
-.view-toggle {
-  display: flex;
-  background: var(--panel-2);
-  border-radius: 11px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.view-toggle button {
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.view-toggle button[aria-pressed='true'] {
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-}
-
 .icon-btn {
   display: grid;
   place-items: center;
@@ -459,12 +435,6 @@ textarea {
   align-items: start;
 }
 
-/* Monitor: the navigation becomes a rail on the left. */
-body[data-view='monitor'] .layout {
-  --stats-width: 400px;
-  padding-left: 108px;
-}
-
 /* Drag handle between the player and the side panel. */
 .splitter {
   align-self: stretch;
@@ -535,8 +505,7 @@ body.resizing .player {
 }
 
 @media (max-width: 1100px) {
-  .layout,
-  body[data-view='monitor'] .layout {
+  .layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
     padding: 16px;
@@ -573,9 +542,6 @@ body.resizing .player {
     flex: 1;
     min-width: 0;
     max-width: none;
-  }
-  .view-toggle {
-    margin-left: auto;
   }
   .settings {
     grid-template-columns: 1fr;
@@ -1089,69 +1055,6 @@ body.resizing .player {
 
 .tab .count[hidden] {
   display: none;
-}
-
-/* Monitor: a rail on the left with icons and short labels. */
-@media (min-width: 901px) {
-  /* A backdrop filter would make the header the containing block of the fixed rail. */
-  body[data-view='monitor'] .topbar {
-    backdrop-filter: none;
-    background: var(--bg);
-  }
-  body[data-view='monitor'] .appnav {
-    position: fixed;
-    left: 12px;
-    top: calc(var(--header-h, 140px) + 20px);
-    bottom: 20px;
-    width: 84px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 8px 6px;
-    border-radius: 18px;
-    overflow-y: auto;
-    z-index: 10;
-    box-shadow: var(--card-shadow);
-    background: var(--panel);
-  }
-  body[data-view='monitor'] .tab {
-    flex-direction: column;
-    gap: 4px;
-    padding: 9px 4px 7px;
-    font-size: 10.5px;
-    letter-spacing: -0.01em;
-    border-radius: 12px;
-    position: relative;
-  }
-  body[data-view='monitor'] .tab-label {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  body[data-view='monitor'] .tab svg {
-    display: block;
-  }
-  body[data-view='monitor'] .tab[aria-selected='true'] {
-    background: var(--panel-2);
-    color: var(--text);
-  }
-  /* Active marker: a short pill just outside the button, clear of the label. */
-  body[data-view='monitor'] .tab[aria-selected='true']::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 50%;
-    width: 3px;
-    height: 22px;
-    margin-top: -11px;
-    border-radius: 0 3px 3px 0;
-    background: var(--accent);
-  }
-  body[data-view='monitor'] .tab .count {
-    position: absolute;
-    top: 3px;
-    right: 6px;
-  }
 }
 
 .tab-body {
@@ -2396,8 +2299,7 @@ ul.issues li {
   gap: 14px;
 }
 
-.bento .span2,
-.dashboard.monitor .span2 {
+.bento .span2 {
   grid-column: span 2;
 }
 
@@ -3005,8 +2907,7 @@ ul.issues li {
   .bento {
     grid-template-columns: 1fr;
   }
-  .bento .span2,
-  .dashboard.monitor .span2 {
+  .bento .span2 {
     grid-column: auto;
   }
   .score-body {

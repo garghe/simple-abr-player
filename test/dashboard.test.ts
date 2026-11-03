@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { buildFeed, buildLadder, healthScore, type ScoreInput } from '../src/ui/dashboard/model';
-import { defaultView, parseView } from '../src/ui/viewmode';
 
 const base: ScoreInput = { stream: [], alignment: null, scte: [], scteMarkers: 0, alarmsActive: 0, alarmsLogged: 0, drm: null };
 
@@ -67,17 +66,6 @@ describe('bitrate ladder', () => {
 
   it('uses the average against @bandwidth for DASH', () => {
     expect(buildLadder([track(720, 3_000_000, 2)], new Map([[2, { avg: 4_000_000, peak: 9_000_000 }]]), 'DASH')[0].over).toBe(true);
-  });
-});
-
-describe('view mode', () => {
-  it('defaults to Monitor for live and Inspect for VOD, unless a choice was remembered', () => {
-    expect(defaultView(true, {})).toBe('monitor');
-    expect(defaultView(false, {})).toBe('inspect');
-    expect(defaultView(true, { live: 'inspect' })).toBe('inspect');
-    expect(defaultView(false, { live: 'inspect', vod: 'monitor' })).toBe('monitor');
-    expect(parseView('monitor')).toBe('monitor');
-    expect(parseView('other')).toBeNull();
   });
 });
 

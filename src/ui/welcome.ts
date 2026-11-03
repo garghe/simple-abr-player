@@ -85,10 +85,10 @@ export class WelcomeGuide {
             'ol',
             { class: 'wl-steps' },
             h('li', null, h('span', null, 'Paste a ', chip('.mpd'), ' or ', chip('.m3u8'), ' URL, or pick one from ', h('b', null, 'Test streams'), ', and press ', h('b', null, 'Probe stream'), '.')),
-            h('li', null, h('span', null, 'Pick a view: ', h('b', null, 'Inspect'), ' for a summary of the stream, ', h('b', null, 'Monitor'), ' to watch a live channel. Live streams open in Monitor by default.')),
+            h('li', null, h('span', null, 'The ', h('b', null, 'Dashboard'), ' sums the stream up: health score, loudness, DRM and ad breaks. Live streams add an events feed and a timeline; on-demand streams the throughput and bitrate ladder.')),
             h('li', null, h('span', null, 'Click a card or a tab for the detail. Hover over a value or label to see what it means.')),
             h('li', null, h('span', null, 'Protected stream? Set it up with ', h('b', null, 'DRM'), '. Blocked by CORS? Use the ', h('b', null, 'Proxy'), ' setting.')),
-            h('li', null, h('span', null, h('b', null, 'Copy link'), ' reopens the same stream and view; ', h('b', null, 'Export'), ' saves everything as JSON.')),
+            h('li', null, h('span', null, h('b', null, 'Copy link'), ' reopens the same stream; ', h('b', null, 'Export'), ' saves everything as JSON.')),
           ),
           h('h3', { class: 'wl-h' }, 'Handy keys'),
           h(

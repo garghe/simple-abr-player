@@ -25,7 +25,6 @@ import { AlarmsTab, loadAlarmSettings } from './ui/stats/alarms';
 import { STANDARDS } from './audio/loudness';
 import { audioPrefs } from './audio/prefs';
 import { Dashboard } from './ui/dashboard/dashboard';
-import { ViewModeSwitch, defaultView, parseView } from './ui/viewmode';
 import { installTooltips } from './ui/tooltip';
 import { WelcomeGuide, shouldShowWelcome } from './ui/welcome';
 
@@ -57,9 +56,6 @@ const topbar = $('.topbar');
 new ResizeObserver(() => document.documentElement.style.setProperty('--header-h', `${topbar.offsetHeight}px`)).observe(topbar);
 const factsEl = $('#stream-summary');
 const formatChip = $('#format-chip');
-const viewSwitch = new ViewModeSwitch($('#view-toggle'));
-/** A view asked for by the link (?view=), applied once when that stream loads. */
-let linkView = parseView(new URLSearchParams(location.search).get('view'));
 const toast = $('#toast');
 
 function showToast(text: string) {
@@ -253,7 +249,6 @@ const dashboard = new Dashboard(
     alarms,
     scteHealth: panel.scteTab.health,
     streamHealth: panel.healthTab.cache,
-    view: viewSwitch,
     open: (tab) => panel.show(tab),
     openMarker: (key) => {
       panel.show('scte');
@@ -350,7 +345,7 @@ ctrl.on('tick', () => {
 ctrl.on('scte', () => dashboard.renderStage());
 ctrl.on('tracks', () => dashboard.renderStage());
 
-// Format chip in the load bar, and the view for this kind of stream.
+// Format chip in the load bar.
 ctrl.on('loaded', () => {
   const loaded = Boolean(ctrl.loadedUrl);
   formatChip.hidden = !loaded;
@@ -358,15 +353,7 @@ ctrl.on('loaded', () => {
     const live = ctrl.player.isLive();
     formatChip.textContent = `${ctrl.player.getManifestType() ?? ''}${live ? ' · LIVE' : ''}`;
     formatChip.classList.toggle('live', live);
-    viewSwitch.live = live;
-    viewSwitch.set(linkView ?? defaultView(live));
-    linkView = null;
-  } else {
-    viewSwitch.live = null;
   }
-  dashboard.renderStage();
-});
-viewSwitch.onChange(() => {
   dashboard.renderStage();
   if (panel.current === 'dashboard') dashboard.render();
 });
@@ -413,8 +400,7 @@ async function load(url: string) {
   spinner.hidden = false;
   const params = new URLSearchParams(location.search);
   params.set('url', url);
-  // ?view= only decides the first load from a shared link.
-  if (!linkView) params.delete('view');
+  params.delete('view'); // from links made before the views were merged
   history.replaceState(null, '', `${location.pathname}?${params}`);
   try {
     await ctrl.load({
@@ -455,7 +441,7 @@ $('#load-form').addEventListener('submit', (e) => {
 $('#share-btn').addEventListener('click', async () => {
   const url = ctrl.loadedUrl ?? urlInput.value;
   if (!url) return showToast('Load a stream first');
-  const link = `${location.origin}${location.pathname}?url=${encodeURIComponent(url)}&view=${viewSwitch.mode}`;
+  const link = `${location.origin}${location.pathname}?url=${encodeURIComponent(url)}`;
   try {
     await navigator.clipboard.writeText(link);
     showToast('Link copied');
@@ -469,7 +455,6 @@ $('#export-btn').addEventListener('click', () => {
   const loaded = Boolean(ctrl.loadedUrl);
   const data = {
     exportedAt: new Date().toISOString(),
-    view: viewSwitch.mode,
     app: { name: 'PlayProbe', version: APP_VERSION, releaseDate: RELEASE_DATE || null },
     userAgent: navigator.userAgent,
     snapshot: snapshot(ctrl),

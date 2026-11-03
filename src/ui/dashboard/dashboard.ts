@@ -7,12 +7,11 @@ import type { PlayerController } from '../../player/controller';
 import { buildTimeline } from '../../scte/timeline';
 import { drawChart } from '../chart';
 import { badge, h } from '../dom';
-import { formatBitrate, formatTime, languageName } from '../format';
+import { clockTime, formatBitrate, formatTime, languageName } from '../format';
 import type { HealthCache } from '../scte/health';
 import { TimelineView } from '../scte/timeline';
 import { snapshot } from '../stats/overview';
 import type { StreamHealthCache } from '../stats/health';
-import type { ViewModeSwitch } from '../viewmode';
 import { buildFeed, buildLadder, channelStates, healthScore, type FeedItem, type ScorePart } from './model';
 
 export interface DashboardDeps {
@@ -21,7 +20,6 @@ export interface DashboardDeps {
   alarms: AlarmMonitor;
   scteHealth: HealthCache;
   streamHealth: StreamHealthCache;
-  view: ViewModeSwitch;
   /** Opens a detail tab. */
   open(tab: string): void;
   /** Opens a SCTE marker in the SCTE-35 tab. */
@@ -45,9 +43,10 @@ const pct = (dbfs: number) => Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100
 const fmtLu = (v: number) => (!Number.isFinite(v) ? '—' : v <= -70 ? 'silence' : v.toFixed(1).replace('-', '−'));
 
 /**
- * The dashboard: Inspect (summary cards) or Monitor (live operations). The
- * side part is the "Dashboard" tab; the stage part sits under the player
- * (facts and throughput in Inspect, the timeline in Monitor).
+ * The dashboard. The side part is the "Dashboard" tab; the stage part sits
+ * under the player. Its cards follow the stream: live streams get the events
+ * feed and the timeline, on-demand streams the throughput graph and the
+ * bitrate ladder; health, loudness, DRM and the next ad break are always there.
  */
 export class Dashboard {
   readonly el = h('div', { class: 'tab-pane dashboard' });
@@ -71,23 +70,18 @@ export class Dashboard {
   // ------------------------------------------------------------- side (tab)
 
   render() {
-    const monitor = this.d.view.mode === 'monitor';
-    this.el.classList.toggle('monitor', monitor);
     if (!this.d.ctrl.loadedUrl) {
       this.el.replaceChildren(this.emptyCard());
       return;
     }
-    this.el.replaceChildren(
-      ...(monitor
-        ? [this.scoreCard(true), this.playbackCard(), this.loudnessCard(true), this.feedCard()]
-        : [h('div', { class: 'bento' }, ...this.inspectCards())]),
-    );
+    this.el.replaceChildren(h('div', { class: 'bento' }, ...this.cards()));
   }
 
-  private inspectCards(): HTMLElement[] {
+  private cards(): HTMLElement[] {
     // The DRM card sits next to loudness for protected streams; otherwise loudness takes the row.
     const drm = this.drmCard();
-    return [this.scoreCard(false), this.loudnessCard(!drm), ...(drm ? [drm] : []), this.breakCard(), this.ladderCard()];
+    const live = this.d.ctrl.player.isLive();
+    return [this.scoreCard(false), this.loudnessCard(!drm), ...(drm ? [drm] : []), this.breakCard(), live ? this.feedCard() : this.ladderCard()];
   }
 
   private emptyCard(): HTMLElement {
@@ -104,7 +98,7 @@ export class Dashboard {
         h('li', null, h('strong', null, 'Picture & sound'), ': loudness, black, frozen, silence, channels'),
         h('li', null, h('strong', null, 'DRM'), ': Widevine, PlayReady, FairPlay licence exchanges'),
       ),
-      h('p', { class: 'muted small' }, 'Live streams open in Monitor, VOD in Inspect; switch any time with Inspect | Monitor.'),
+      h('p', { class: 'muted small' }, 'Live streams add an events feed and a timeline; on-demand streams a throughput graph and the bitrate ladder.'),
     );
   }
 
@@ -406,25 +400,6 @@ export class Dashboard {
     );
   }
 
-  private playbackCard(): HTMLElement {
-    const s = snapshot(this.d.ctrl);
-    const track = this.d.ctrl.player.getVariantTracks().find((t) => t.active);
-    const cell = (label: string, value: string, unit = '') => h('div', null, h('small', null, label), h('b', null, value, unit ? h('em', null, unit) : ''));
-    return h(
-      'div',
-      { class: 'card dash-card span2' },
-      h('h4', null, 'Playback', s.live ? badge(s.liveLatency !== null ? `latency ${s.liveLatency.toFixed(1)} s` : 'LIVE', 'live') : ''),
-      h(
-        'div',
-        { class: 'kv-grid' },
-        cell('Rendition', track?.height ? `${track.height}p` : s.resolution, track?.videoCodec ?? ''),
-        cell('Bandwidth', formatBitrate(s.estimatedBandwidth), 'est.'),
-        cell('Buffer', s.bufferAhead.toFixed(1), 's ahead'),
-        cell('Dropped frames', String(s.droppedFrames), `/ ${s.decodedFrames}`),
-      ),
-    );
-  }
-
   private feedCard(): HTMLElement {
     const { ctrl, alarms } = this.d;
     const items = buildFeed(
@@ -443,7 +418,7 @@ export class Dashboard {
           h(
             'li',
             null,
-            h('span', { class: 'mono ts' }, i.at.toISOString().slice(11, 19)),
+            h('span', { class: 'mono ts' }, clockTime(i.at)),
             h('span', { class: 'dot', style: `background:${FEED_COLOR[i.kind]}` }),
             h(
               'div',
@@ -463,19 +438,17 @@ export class Dashboard {
 
   renderStage() {
     const ctrl = this.d.ctrl;
-    const monitor = this.d.view.mode === 'monitor';
     if (!ctrl.loadedUrl) {
       this.facts.replaceChildren();
       this.stage.replaceChildren();
       return;
     }
-    if (monitor) {
-      this.facts.replaceChildren();
+    this.renderFacts();
+    if (ctrl.player.isLive()) {
       if (this.stage.firstChild !== this.timelineCard) this.stage.replaceChildren(this.timelineCard);
       this.timeline.render();
       return;
     }
-    this.renderFacts();
     if (this.stage.firstChild !== this.throughput) this.stage.replaceChildren(this.throughput);
     drawChart(this.chart, ctrl.samples);
   }

@@ -10,7 +10,7 @@
 // The bundled sample is VP9/Opus, so it plays in Playwright's open-source
 // Chromium. Set CHROMIUM_PATH to use another Chromium/Chrome binary.
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -20,7 +20,25 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'docs', 'screenshots');
 mkdirSync(outDir, { recursive: true });
 
-const server = await createServer({ root, configFile: join(root, 'vite.config.ts'), server: { port: 5199, strictPort: false }, logLevel: 'error' });
+// A live copy of the bundled DASH sample (the dashboard looks different for
+// live streams): the same numbered 2 s segments, behind a dynamic MPD whose
+// availability start is set on its first request, so ~25 s of live runway.
+let liveStart = null;
+const liveSample = {
+  name: 'playprobe-live-sample',
+  configureServer(s) {
+    s.middlewares.use('/samples/scte-demo/live.mpd', (_req, res) => {
+      liveStart ??= new Date(Date.now() - 14000);
+      const mpd = readFileSync(join(root, 'public', 'samples', 'scte-demo', 'dash.mpd'), 'utf8')
+        .replace('type="static"', `type="dynamic" availabilityStartTime="${liveStart.toISOString()}" publishTime="${liveStart.toISOString()}" minimumUpdatePeriod="PT2S" timeShiftBufferDepth="PT30S" suggestedPresentationDelay="PT4S"`)
+        .replace(/\s*mediaPresentationDuration="[^"]*"/, '');
+      res.setHeader('Content-Type', 'application/dash+xml');
+      res.end(mpd);
+    });
+  },
+};
+
+const server = await createServer({ root, configFile: join(root, 'vite.config.ts'), plugins: [liveSample], server: { port: 5199, strictPort: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0];
 console.log(`Dev server at ${base}`);
@@ -30,16 +48,19 @@ const DASH_SAMPLE = `${base}samples/scte-demo/dash.mpd`;
 const HLS_SAMPLE = `${base}samples/scte-demo/master.m3u8`;
 const ANGEL_ONE = 'https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd';
 
-async function open(url, { width = 1480, height = 900, view } = {}) {
+async function open(url, { width = 1480, height = 900 } = {}) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
   await page.addInitScript(() => localStorage.setItem('sap.welcome.v1', 'hide'));
-  await page.goto(`${base}?url=${encodeURIComponent(url)}${view ? `&view=${view}` : ''}`);
+  await page.goto(`${base}?url=${encodeURIComponent(url)}`);
   await page.waitForFunction(() => window.abrPlayer?.loadedUrl, null, { timeout: 30000 });
   return page;
 }
 
-const tab = (page, name) => page.click(`button.tab:has-text("${name}")`);
+const tab = async (page, name) => {
+  await page.click(`button.tab:has-text("${name}")`);
+  await page.mouse.move(1, 1); // no tooltip in the shot
+};
 const seek = (page, t) => page.evaluate((x) => (window.abrPlayer.video.currentTime = x), t);
 const shot = async (page, name) => {
   await page.screenshot({ path: join(outDir, name) });
@@ -65,23 +86,23 @@ const play = (page, rate = 1) =>
   await page.close();
 }
 
-// 0. The two views: Inspect (DASH sample) and Monitor (alarms demo).
+// 0. The dashboard, on demand (DASH sample) and live (live copy of the sample).
 {
   const page = await open(DASH_SAMPLE);
   await play(page, 2);
   await page.waitForTimeout(9500);
   await tab(page, 'Dashboard');
   await page.waitForTimeout(500);
-  await shot(page, 'inspect.png');
+  await shot(page, 'dashboard.png');
   await page.close();
 }
 {
-  const page = await open(`${base}samples/alarms-demo/master.m3u8`, { view: 'monitor' });
-  await play(page, 2);
-  await page.waitForTimeout(6500);
+  const page = await open(`${base}samples/scte-demo/live.mpd`);
+  await play(page);
+  await page.waitForTimeout(6000);
   await tab(page, 'Dashboard');
-  await page.waitForTimeout(500);
-  await shot(page, 'monitor.png');
+  await page.waitForTimeout(800);
+  await shot(page, 'dashboard-live.png');
   await page.close();
 }
 

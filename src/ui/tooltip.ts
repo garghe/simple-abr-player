@@ -6,7 +6,6 @@ const TARGETS: [selector: string, context?: string][] = [
   ['.subnav button', 'scte'],
   ['.fact', 'fact'],
   ['button.tab'],
-  ['.view-toggle button'],
   ['table.kv th'],
   ['table th'],
   ['h3'],
