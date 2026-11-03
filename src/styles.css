@@ -837,7 +837,7 @@ body.resizing .player {
   border: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 12px;
   padding: 4px 6px;
-  max-width: 150px;
+  max-width: 170px;
   border-radius: 6px;
 }
 
@@ -855,13 +855,14 @@ body.resizing .player {
     display: none;
   }
   .ctl-select {
-    max-width: 118px;
+    max-width: 140px;
   }
 }
 
-@container (max-width: 760px) {
-  /* Narrow player (portrait tablets, phones): the audio, subtitle and quality
-     pickers move to their own row at full width, so their labels fit. */
+@container (max-width: 860px) {
+  /* Narrower player (laptop beside the side panel, tablets): the audio,
+     subtitle and quality pickers move to the next row at their natural width,
+     so their labels fit. Phones stretch them to full width (below). */
   .ctl-row {
     flex-wrap: wrap;
     row-gap: 6px;
@@ -871,19 +872,11 @@ body.resizing .player {
     height: 0;
   }
   .ctl-label {
-    flex: 1 1 28%;
+    flex: 0 1 auto;
     min-width: 0;
   }
-  .ctl-label:first-of-type {
-    flex-grow: 2.2;
-  }
   .ctl-select {
-    max-width: none;
-    width: 100%;
-  }
-  .ctl-select.narrow {
-    width: auto;
-    max-width: 64px;
+    max-width: 200px;
   }
   .volume {
     width: 52px;
@@ -917,13 +910,17 @@ body.resizing .player {
     flex-basis: 100%;
     height: 0;
   }
+  /* Widths by what each shows: audio "English · stereo", subtitles "Off",
+     quality "Auto (480p)". */
   .ctl-label {
-    flex: 1 1 28%;
+    flex: 1 1 22%;
     min-width: 0;
   }
-  /* Audio track names ("English · stereo") need more room than Off / Auto. */
   .ctl-label:first-of-type {
-    flex-grow: 2.2;
+    flex-basis: 38%;
+  }
+  .ctl-label:last-of-type {
+    flex-basis: 30%;
   }
   .ctl-select {
     max-width: none;

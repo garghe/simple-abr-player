@@ -268,7 +268,7 @@ try {
     const page = await newPage();
     await page.click('#drm-btn');
     await page.click('.drm-mode button:has-text("Widevine")');
-    await page.fill('input[placeholder="https://license.example.com/widevine"]', 'https://cwip-shaka-proxy.appspot.com/no_auth');
+    await page.fill('input[placeholder="https://…/widevine"]', 'https://cwip-shaka-proxy.appspot.com/no_auth');
     await page.fill('#url', WIDEVINE_STREAM);
     await page.click('#load-btn');
     await page.waitForTimeout(6000);
@@ -302,8 +302,8 @@ try {
     page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'QA FairPlay' : undefined));
     await page.click('#drm-btn');
     await page.click('.drm-mode button:has-text("FairPlay")');
-    await page.fill('input[placeholder="https://license.example.com/fairplay"]', 'https://lic.example.com/fps');
-    await page.fill('input[placeholder="https://license.example.com/fairplay.cer"]', 'https://lic.example.com/fps.cer');
+    await page.fill('input[placeholder="https://…/fairplay"]', 'https://lic.example.com/fps');
+    await page.fill('input[placeholder="https://…/fairplay.cer"]', 'https://lic.example.com/fps.cer');
     await page.fill('.drm-bottom textarea', 'Authorization: Bearer abc');
     await page.fill('#url', 'https://cdn.example.com/fp/master.m3u8');
     await page.click('button:has-text("Save as…")');
@@ -314,7 +314,7 @@ try {
     await page.selectOption('select[aria-label="Saved DRM profile"]', 'QA FairPlay');
     const after = await page.evaluate(() => ({
       url: document.querySelector('#url').value,
-      lic: document.querySelector('input[placeholder="https://license.example.com/fairplay"]').value,
+      lic: document.querySelector('input[placeholder="https://…/fairplay"]').value,
       headers: document.querySelector('.drm-bottom textarea').value,
       button: document.querySelector('#drm-btn').textContent,
     }));
@@ -324,7 +324,7 @@ try {
     await page.waitForTimeout(500);
     const preset = await page.evaluate(() => ({
       mode: document.querySelector('#drm-btn').textContent,
-      lic: document.querySelector('input[placeholder="https://license.example.com/widevine"]').value,
+      lic: document.querySelector('input[placeholder="https://…/widevine"]').value,
     }));
     check('Widevine preset fills the license server', preset.mode.includes('Widevine') && preset.lic.includes('cwip-shaka-proxy'), JSON.stringify(preset));
     await page.close();

@@ -65,6 +65,8 @@ const STREAMS = {
 const PLAN = quick
   ? [
       ['dash', 'desktop', 'light', true],
+      ['dash', 'portrait', 'light', false],
+      ['dash', 'phone', 'light', false],
       ['live', 'phone', 'dark', true],
       ['scteIssues', 'tablet', 'dark', true],
       ['broken', 'phone', 'light', false],
@@ -168,7 +170,7 @@ function inspectPage() {
     if (!shown.trim()) continue;
     const cs = getComputedStyle(el);
     ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (el.tagName === 'SELECT' ? 18 : 0);
+    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (el.tagName === 'SELECT' ? 22 : 0) /* the dropdown arrow */;
     if (ctx.measureText(shown).width + pad > el.clientWidth + 1) out.push(['text cut off in a form field', `${path(el)} "${shown.slice(0, 60)}" (${Math.round(ctx.measureText(shown).width + pad - el.clientWidth)} px too long)`]);
   }
 
