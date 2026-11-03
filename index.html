@@ -52,7 +52,7 @@
       </div>
       <form id="load-form" class="loadbar" autocomplete="off">
         <span id="format-chip" class="format-chip" hidden></span>
-        <input id="url" type="url" list="url-history" required placeholder="Paste an MPEG-DASH (.mpd) or HLS (.m3u8) URL" aria-label="Stream URL" />
+        <input id="url" type="url" list="url-history" required placeholder="Paste a DASH (.mpd) or HLS (.m3u8) URL" aria-label="Stream URL" />
         <datalist id="url-history"></datalist>
         <select id="presets" aria-label="Test streams"></select>
         <button type="button" id="drm-btn" class="chip-btn" title="DRM settings (Widevine / PlayReady / FairPlay)" aria-expanded="false"></button>
@@ -65,9 +65,9 @@
       <div class="field">
         <label for="proxy-mode">CORS proxy</label>
         <select id="proxy-mode">
-          <option value="auto">Auto — retry through the local proxy on network/CORS errors</option>
-          <option value="always">Always — send every request through the local proxy</option>
-          <option value="off">Off — fetch directly from the browser</option>
+          <option value="auto" title="Fetch directly; retry through the proxy after a network or CORS error">Auto: proxy after a CORS error</option>
+          <option value="always" title="Send every manifest request (and segments, if allowed) through the proxy">Always: through the proxy</option>
+          <option value="off" title="Fetch everything directly from the browser">Off: fetch directly</option>
         </select>
         <small id="proxy-status"></small>
       </div>

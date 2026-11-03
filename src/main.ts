@@ -139,7 +139,7 @@ renderDrmButton();
 
 const presetByUrl = new Map<string, Preset>();
 const groups = new Map<string, HTMLOptGroupElement>();
-presetSel.append(h('option', { value: '' }, 'Test streams…'));
+presetSel.append(h('option', { value: '' }, 'Test streams'));
 for (const p of presets()) {
   let group = groups.get(p.group);
   if (!group) {

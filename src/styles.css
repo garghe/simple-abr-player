@@ -389,6 +389,16 @@ code,
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+
+/* A long option or placeholder must not widen the panel past the screen. */
+.field > select,
+.field > textarea,
+.field > input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field label {
@@ -544,7 +554,7 @@ body.resizing .player {
     max-width: none;
   }
   .settings {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     margin: 10px 16px 0;
   }
 }
@@ -888,6 +898,10 @@ body.resizing .player {
   .ctl-label {
     flex: 1 1 28%;
     min-width: 0;
+  }
+  /* Audio track names ("English · stereo") need more room than Off / Auto. */
+  .ctl-label:first-of-type {
+    flex-grow: 2.2;
   }
   .ctl-select {
     max-width: none;
@@ -1848,7 +1862,7 @@ pre .hl {
 }
 
 .lead-input {
-  width: 4.5em;
+  width: 6.5em;
 }
 
 .issue-group {
@@ -2188,6 +2202,10 @@ ul.issues li {
 /* ---- Health: rendition alignment ---- */
 .align-controls {
   flex-wrap: wrap;
+}
+
+.align-controls select {
+  min-width: 8.5em;
 }
 
 .align-wrap {
@@ -3186,4 +3204,27 @@ dialog.welcome::backdrop {
   font: 11px/1.4 var(--mono);
   color: color-mix(in srgb, #fecaca 70%, transparent);
   overflow-wrap: anywhere;
+}
+
+/* Phones: the DRM mode switch gets its own full-width row, and the load bar
+   leaves the test-stream picker room for its label. */
+@media (max-width: 520px) {
+  .drm-mode {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .drm-mode .segmented {
+    width: 100%;
+  }
+  .drm-mode .segmented button {
+    flex: 1 1 auto;
+    padding: 6px 4px;
+  }
+  .loadbar .probe {
+    padding: 9px 14px;
+  }
+  /* The Format card under the player says the same; the test-stream picker needs the room. */
+  .loadbar .format-chip {
+    display: none;
+  }
 }

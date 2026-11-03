@@ -102,6 +102,7 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm run sample:alarms` | Regenerates the stream health & alarms demo (needs `ffmpeg`). |
 | `npm run sample:issues` | Regenerates the SCTE-35 health demo from the bundled sample (no `ffmpeg` needed). |
 | `npm run test:e2e:health` | Checks stream health, rendition alignment and the alarms end to end in headless Chromium. Add `-- --shots` to refresh their screenshots. |
+| `npm run test:ui` | Release check of the whole UI in headless Chromium (about 25 minutes; `-- --quick` for a 5-minute pass). See [Testing](#testing). |
 | `npm run test:e2e:scte` | Checks the SCTE-35 tools end to end in headless Chromium on the bundled samples. Add `-- --shots` to refresh the SCTE screenshots. |
 | `npm run test:e2e:drm` | Runs the DRM pipeline end to end in headless Chromium with ClearKey and a local test license server. Add `-- --shots` to refresh the DRM screenshots. |
 | `npm run deploy` | Builds and deploys to Cloudflare Workers (after `npx wrangler login`). |
@@ -725,11 +726,21 @@ The unit tests cover:
 
 - **Stream health, alignment and alarms**: the segment reader on the bundled sample and on synthetic TS (H.264 IDR / non-IDR), codec comparison, every playlist refresh check (sequence numbers, discontinuity sequence, target duration, PDT drift and changes, stale, ended), MPD timelines (repeats, gaps, long segments, stale), downloaded segment checks (codecs, duration, bitrate, timestamp gaps), rendition comparison (boundaries, timestamps, durations, keyframes, missing segments), and every alarm (hold, release, seeks, content-time at 4×, LFE ignored, disabled alarms).
 
-`npm run test:e2e:health` plays the stream health & alarms demo in headless Chromium at 4× and checks that every alarm raises, the banner, the timeline marks and the CSV; the stream checks (target duration, codec, bandwidth after switching to 360p) and the alignment failure; and that the clean sample has no stream problems, aligned renditions and no alarms.
+`npm run test:e2e:health` plays the stream health & alarms demo in headless Chromium at 2× and checks that every alarm raises, the banner, the timeline marks and the CSV; the stream checks (target duration, codec, bandwidth after switching to 360p) and the alignment failure; and that the clean sample has no stream problems, aligned renditions and no alarms.
 
 `npm run test:e2e:scte` plays the two bundled samples in headless Chromium and checks that every problem planted in the health demo is reported, that the clean sample passes, the ad pod and its fill, the timeline, structure, navigation keys, CSV download, the marker missing from the 240p playlist (after switching to it) and the builder.
 
 For end-to-end checks, `npm run screenshots` drives the real app in Chromium against both bundled samples. It's a quick smoke test for DASH, HLS, SCTE detection and the UI.
+
+**Before a release, run `npm run test:ui`.** It loads the bundled samples (DASH and HLS on demand, a live copy of the DASH sample, the SCTE-35 and alarm demos), a broken URL and the empty start page. It opens every tab, sub-view, the DRM and proxy panels, tooltips and the welcome guide, at phone (390 px), portrait tablet, tablet, laptop and desktop sizes, in the light and dark themes. It fails on:
+
+- page errors, console errors and failed requests
+- anything that makes the page scroll sideways
+- text clipped by its box, spilling out of its card, or cut off inside a dropdown or placeholder
+- broken values on screen (`NaN`, `undefined`, `[object Object]`, `Infinity`)
+- tooltips or the guide placed outside the screen
+
+A dropdown that may show a long URL is marked `data-long-text` to be allowed to cut it short.
 
 ---
 

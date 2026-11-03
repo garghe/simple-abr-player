@@ -7,7 +7,8 @@ const HIGHLIGHT = /SCTE|CUE-OUT|CUE-IN|DATERANGE|EventStream|InbandEventStream|<
 /** Shows the raw manifest / playlists exactly as fetched, refreshed for live. */
 export class ManifestTab {
   readonly el = h('div', { class: 'tab-pane' });
-  private picker = h('select', { 'aria-label': 'Captured document', onchange: () => this.renderBody(true) });
+  // data-long-text: URLs may be cut short here (scripts/ui-audit.mjs allows it).
+  private picker = h('select', { 'aria-label': 'Captured document', 'data-long-text': '', onchange: () => this.renderBody(true) });
   private meta = h('span', { class: 'muted small' });
   private body = h('pre', { class: 'code manifest' });
   private selected: string | null = null;
@@ -19,6 +20,7 @@ export class ManifestTab {
         'div',
         { class: 'toolbar' },
         this.picker,
+
         h(
           'button',
           {

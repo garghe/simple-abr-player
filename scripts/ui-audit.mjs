@@ -9,7 +9,8 @@
 // panel at phone to desktop sizes in the light and dark themes. Reports:
 //   - page errors, console errors and failed same-origin requests
 //   - anything that makes the page scroll sideways
-//   - text clipped by its box, or spilling out of its card
+//   - text clipped by its box, spilling out of its card, or cut off in a
+//     dropdown or placeholder
 //   - broken values in the page (NaN, undefined, [object Object], Infinity)
 //   - tooltips and the welcome guide placed outside the screen
 //
@@ -157,6 +158,18 @@ function inspectPage() {
       if (r.right > c.right + 2 || r.left < c.left - 2) out.push(['text spills out of its box', `${path(el)} "${text(el)}" (${Math.round(r.right - c.right)} px past ${path(card).split(' > ').pop()})`]);
     }
     if (r.right > vw + 1 && !document.documentElement.scrollWidth) out.push(['text off screen', `${path(el)} "${text(el)}"`]);
+  }
+
+  // 3b. Text cut off inside a dropdown or a text field's placeholder.
+  const ctx = document.createElement('canvas').getContext('2d');
+  for (const el of document.querySelectorAll('select, input[placeholder]:not([type=checkbox]):not([type=radio])')) {
+    if (!visible(el) || el.closest('dialog:not([open])') || el.hasAttribute('data-long-text')) continue;
+    const shown = el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent ?? '' : el.value ? '' : el.placeholder;
+    if (!shown.trim()) continue;
+    const cs = getComputedStyle(el);
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (el.tagName === 'SELECT' ? 18 : 0);
+    if (ctx.measureText(shown).width + pad > el.clientWidth + 1) out.push(['text cut off in a form field', `${path(el)} "${shown.slice(0, 60)}" (${Math.round(ctx.measureText(shown).width + pad - el.clientWidth)} px too long)`]);
   }
 
   // 4. Broken values.

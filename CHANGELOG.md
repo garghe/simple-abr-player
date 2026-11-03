@@ -10,6 +10,8 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 
 ### Added
 
+- `npm run test:ui`: a release check of the whole UI (errors, sideways scrolling, clipped or cut-off text, broken values) on every tab, at phone to desktop sizes, in both themes.
+
 - **PlayReady DRM**: license URL (or the one in the stream's PlayReady header), SL3000 / SL2000 security level, and the generic request/response formats; included in saved profiles. In Auto mode, Edge prefers PlayReady when it is set up.
 - PlayReady headers decoded from PSSH, `mspr:pro` and HLS key tags (key IDs, version, algorithm, license URL), with a **Use this** button in the DRM tab for the stream's license URL.
 - Microsoft PlayReady test streams (DASH, and HLS with CBCS) in the test stream list.
@@ -41,6 +43,9 @@ Planned as 1.1.0 (PlayReady), 1.2.0 (SCTE-35 tools), 1.3.0 (stream health, rendi
 
 ### Fixed
 
+- Load and playback errors explained in plain words (e.g. *The server answered HTTP 404 (not found: check the address)*, *This address is not a DASH (.mpd) or HLS (.m3u8) manifest*), with the player's error code underneath.
+- Phones: the proxy settings and the DRM mode switch no longer run off the screen, and the test-stream picker, audio-track picker, DRM placeholders, proxy modes and small number fields no longer cut their text.
+- The deployed site's proxy check no longer logs a 404 in the browser console when the proxy is off.
 - False **Black picture** alarms on dark scenes (e.g. a starfield in Angel One): the picture must also show nothing brighter than 10 % outside its corners.
 - False **Silence** and **Frozen picture** alarms on test cards with a beep each second and a ticking clock (e.g. the DASH-IF livesim2 `testpic` streams): a short break in the condition now starts the hold time again, and a picture with any area clearly changing isn't frozen.
 - The dashboard's channel meters show the highest level of the last 1.5 s, so short sounds (beeps, speech) no longer leave them looking empty.

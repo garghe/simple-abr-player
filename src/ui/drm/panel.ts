@@ -149,7 +149,7 @@ export class DrmPanel {
       'fieldset',
       { class: 'drm-box' },
       h('legend', null, 'Widevine', h('small', null, ' Chrome · Edge · Firefox · Android')),
-      labelled('License URL', this.bind('widevine.licenseUrl', h('input', { type: 'url', placeholder: 'https://license.example.com/widevine', spellcheck: false }))),
+      labelled('License URL', this.bind('widevine.licenseUrl', h('input', { type: 'url', placeholder: 'https://…/widevine', spellcheck: false }))),
       labelled(
         'Security level',
         this.bind(
@@ -183,10 +183,10 @@ export class DrmPanel {
     this.prBox = h(
       'fieldset',
       { class: 'drm-box' },
-      h('legend', null, 'PlayReady', h('small', null, ' Edge on Windows · Smart TVs · Xbox')),
+      h('legend', null, 'PlayReady', h('small', null, ' Edge · Smart TVs · Xbox')),
       labelled(
         'License URL',
-        this.bind('playready.licenseUrl', h('input', { type: 'url', placeholder: "empty: use the stream's license URL (LA_URL)", spellcheck: false, 'aria-label': 'PlayReady license URL' })),
+        this.bind('playready.licenseUrl', h('input', { type: 'url', placeholder: "empty: the stream's LA_URL", title: "Leave empty to use the license URL in the stream (LA_URL)", spellcheck: false, 'aria-label': 'PlayReady license URL' })),
       ),
       labelled(
         'Security level',
@@ -252,8 +252,8 @@ export class DrmPanel {
       'fieldset',
       { class: 'drm-box' },
       h('legend', null, 'FairPlay', h('small', null, ' Safari (macOS · iOS · iPadOS)')),
-      labelled('License URL', this.bind('fairplay.licenseUrl', h('input', { type: 'url', placeholder: 'https://license.example.com/fairplay', spellcheck: false }))),
-      labelled('Certificate URL', this.bind('fairplay.certificateUrl', h('input', { type: 'url', placeholder: 'https://license.example.com/fairplay.cer', spellcheck: false }))),
+      labelled('License URL', this.bind('fairplay.licenseUrl', h('input', { type: 'url', placeholder: 'https://…/fairplay', spellcheck: false }))),
+      labelled('Certificate URL', this.bind('fairplay.certificateUrl', h('input', { type: 'url', placeholder: 'https://…/fairplay.cer', spellcheck: false }))),
       h('div', { class: 'drm-cert' }, h('span', null, 'or upload: '), certFile, this.certName, removeCert),
       labelled(
         'Content ID',
