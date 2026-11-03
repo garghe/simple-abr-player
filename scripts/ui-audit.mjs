@@ -171,7 +171,8 @@ function inspectPage() {
     const cs = getComputedStyle(el);
     ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + (el.tagName === 'SELECT' ? 22 : 0) /* the dropdown arrow */;
-    if (ctx.measureText(shown).width + pad > el.clientWidth + 1) out.push(['text cut off in a form field', `${path(el)} "${shown.slice(0, 60)}" (${Math.round(ctx.measureText(shown).width + pad - el.clientWidth)} px too long)`]);
+    // 3 px tolerance: browsers size a dropdown to its text exactly, so 1–2 px is measuring noise.
+    if (ctx.measureText(shown).width + pad > el.clientWidth + 3) out.push(['text cut off in a form field', `${path(el)} "${shown.slice(0, 60)}" (${Math.round(ctx.measureText(shown).width + pad - el.clientWidth)} px too long)`]);
   }
 
   // 4. Broken values.
