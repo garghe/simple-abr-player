@@ -3,8 +3,8 @@ import { badge, dataTable, h, kvTable } from '../dom';
 
 /**
  * Device capabilities: codec support (MSE + MediaCapabilities), DRM key
- * systems and security levels, HDCP and display. Useful now to understand
- * what a device can play, and the groundwork for the DRM iteration.
+ * systems and security levels, HDCP and display. Shows what this
+ * device can play, and which DRM it supports.
  */
 
 const CODECS: [string, string][] = [
@@ -124,7 +124,7 @@ export class DeviceTab {
     const codecRows = await Promise.all(
       CODECS.map(async ([name, type]) => {
         const mse = window.MediaSource?.isTypeSupported(type) ?? false;
-        return [name, h('span', { class: 'mono small' }, type), badge(mse ? 'yes' : 'no', mse ? 'ok' : 'warn'), await mediaCapabilities(type)];
+        return [name, h('span', { class: 'mono small break' }, type), badge(mse ? 'yes' : 'no', mse ? 'ok' : 'warn'), await mediaCapabilities(type)];
       }),
     );
     const drm = await Promise.all(KEY_SYSTEMS.map(probeKeySystem));
@@ -146,9 +146,10 @@ export class DeviceTab {
       dataTable(
         ['Key system', 'Supported', 'Security levels', 'HDCP'],
         drm.map((d) => [
-          h('span', null, d.name, h('div', { class: 'mono small muted' }, d.keySystem)),
+          h('span', null, d.name, h('div', { class: 'mono small muted wrap' }, d.keySystem)),
           badge(d.supported ? 'yes' : 'no', d.supported ? 'ok' : ''),
-          d.levels.join(', ') || (d.supported ? 'default' : '—'),
+          // One level per line, so long names like SW_SECURE_DECODE don't push the HDCP column out of view.
+          d.levels.length ? d.levels.map((l) => h('div', { class: 'mono small wrap' }, l)) : d.supported ? 'default' : '—',
           d.hdcp ?? '—',
         ]),
       ),

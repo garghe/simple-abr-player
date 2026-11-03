@@ -84,7 +84,7 @@ export class DrmTab {
           d.system,
           d.scheme ?? '—',
           h('span', { class: 'mono small' }, d.keyIds.length ? d.keyIds.map(formatKid).join('\n') : '—'),
-          h('span', { class: 'small break' }, d.details.join(' · ') || '—'),
+          h('span', { class: 'small wrap' }, d.details.join(' · ') || '—'),
         ]),
         'compact drm-declared',
       ),

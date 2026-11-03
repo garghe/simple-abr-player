@@ -158,7 +158,7 @@ In the Cloudflare dashboard go to **Workers & Pages → Create → Import a repo
 
 Under **Advanced settings → Build variables**, nothing is required. The build uses Node 22 from `.nvmrc`. If your build image ignores `.nvmrc`, add `NODE_VERSION` = `22`.
 
-**Production branch:** Cloudflare deploys the repository's default branch, currently `claude/brave-brown-gye24p` (the only branch). After you merge into `main`, change it in **Settings → Build → Branch control**.
+**Production branch:** `main`. If Cloudflare picked a different branch, change it in **Settings → Build → Branch control**.
 
 Press **Deploy**. The app will be available at `https://simple-abr-player.<your-subdomain>.workers.dev`. Every push to the production branch redeploys it automatically.
 
@@ -213,7 +213,7 @@ To try the Worker locally with the same runtime Cloudflare uses: `npm run build 
 
 ## Screenshots
 
-> Captured with `npm run screenshots` in **headless Chromium**. That browser has no H.264/AAC codecs and no DRM, which is why the Device tab shows them as unsupported. In regular Chrome, Edge or Safari they show as supported.
+> Captured with `npm run screenshots` in **headless Chromium** on Linux. The codec and DRM support shown in the Device tab is that browser's; Chrome, Edge or Safari on your machine will show their own.
 
 **SCTE-35 tab during an ad break (DASH sample)**: ad-break banner on the video, markers and break regions on the seek bar, the marker list, and the decoded detail of an in-band `time_signal`.
 ![SCTE-35](docs/screenshots/scte-dash.png)
@@ -370,12 +370,12 @@ Notes:
 
 ## Architecture
 
-The app is plain TypeScript with no UI framework, built with **Vite**. Playback uses **[Shaka Player](https://github.com/shaka-project/shaka-player)**: one engine for both DASH and HLS, and one that already supports Widevine, PlayReady and FairPlay for the DRM iteration.
+The app is plain TypeScript with no UI framework, built with **Vite**. Playback uses **[Shaka Player](https://github.com/shaka-project/shaka-player)**: one engine for both DASH and HLS, and with built-in support for Widevine, PlayReady and FairPlay.
 
 ```mermaid
 flowchart LR
   subgraph Browser
-    UI["UI<br/>main.ts · controls · seek bar<br/>stats panel (7 tabs) · overlay"]
+    UI["UI<br/>main.ts · controls · seek bar<br/>stats panel (9 tabs) · overlay"]
     PC["PlayerController<br/>player/controller.ts"]
     SM["ScteMonitor<br/>scte/monitor.ts"]
     DEC["SCTE-35 decoder<br/>scte/scte35.ts"]
@@ -451,7 +451,7 @@ sequenceDiagram
 
 ### Design choices
 
-- **Shaka Player rather than hls.js + dash.js:** one engine and one set of track and stats APIs for both formats, and its DRM support carries over directly to the next iteration.
+- **Shaka Player rather than hls.js + dash.js:** one engine and one set of track and stats APIs for both formats, and built-in DRM support (used for Widevine and FairPlay).
 - **The app reads HLS playlists itself:** Shaka only reports `EXT-X-DATERANGE`, and only when the playlist has `PROGRAM-DATE-TIME`. Reading the playlist text catches every tag style, and costs nothing extra because it reuses the responses Shaka already downloaded.
 - **Proxy that keeps the URL path:** relative URLs in the manifest keep working without rewriting the manifest, and the same approach works for every request type.
 - **No UI framework:** keeps the app small and quick to load. Each part is a plain class with a `render()` method.
@@ -476,7 +476,7 @@ sequenceDiagram
 │   ├── audio/                 Audio meters: DSP, loudness, fMP4 reader, WebCodecs + Web Audio sources
 │   ├── drm/                   DRM settings, license request/response formats, protection parsing, monitor
 │   ├── ui/                    Controls, seek bar, chart, helpers
-│   │   └── stats/             Overview, Tracks, SCTE-35, Network, Manifest, Device, Log tabs
+│   │   └── stats/             One file per tab (Overview, Tracks, Audio, DRM, SCTE-35, …)
 │   ├── presets.ts             Test stream list
 │   ├── settings.ts            Saved settings / history
 │   └── styles.css
@@ -553,7 +553,6 @@ VP9/Opus is used so the sample also plays in open-source Chromium, which is used
 | --- | --- |
 | `Shaka error 1002 HTTP_ERROR` | Usually CORS or a network failure. With `npm run dev`, set the proxy to **Auto** or **Always**. Check the **Network** tab for the failing URL and status. |
 | `4032 CONTENT_UNSUPPORTED_BY_BROWSER` | The browser can't decode those codecs (for example HEVC in Firefox, or H.264 in headless Chromium). The **Device** tab shows what this device supports. |
-| `6001` / `6007` (DRM) | The stream is encrypted. DRM comes in the next iteration. |
 | Nothing plays from a deployed `https://` site | The stream is `http://` (blocked as mixed content) or doesn't allow browser access. Run locally with `npm run dev`. |
 | Proxy can't reach the origin behind a corporate proxy | Set `HTTPS_PROXY` (and `NODE_EXTRA_CA_CERTS` if your company inspects HTTPS) before `npm run dev`. |
 | On Cloudflare, a stream fails with a CORS error and the app doesn't offer the proxy | The proxy is off on the Worker. Set `PROXY_ENABLED=true` (and `PROXY_ALLOWED_HOSTS`), then redeploy. Check with `/__proxy/health`. |
@@ -601,4 +600,3 @@ To release a version:
 
 Third-party components keep their own licenses. In particular, [Shaka Player](https://github.com/shaka-project/shaka-player) is Apache-2.0, and the public test streams listed in the app belong to their respective owners. The bundled sample stream in `public/samples/` is generated by this project (`npm run sample`) and is covered by the MIT license.
 
-<!-- deploy trigger -->

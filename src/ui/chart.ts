@@ -29,7 +29,24 @@ export function drawChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, hgt);
 
-  const pad = { l: 8, r: 8, t: 22, b: 8 };
+  // Legend first: wrap onto extra rows when the panel is too narrow for one line.
+  ctx.font = '11px system-ui, sans-serif';
+  const last = samples.at(-1);
+  const legend: { series: Series; text: string; x: number; row: number }[] = [];
+  let legendX = 8;
+  let row = 0;
+  for (const series of SERIES) {
+    const text = `${series.label}: ${last ? series.format(series.value(last)) : '—'}`;
+    const itemW = ctx.measureText(text).width + 12;
+    if (legendX > 8 && legendX + itemW > w - 8) {
+      legendX = 8;
+      row++;
+    }
+    legend.push({ series, text, x: legendX, row });
+    legendX += itemW + 12;
+  }
+
+  const pad = { l: 8, r: 8, t: 22 + row * 16, b: 8 };
   const plotW = w - pad.l - pad.r;
   const plotH = hgt - pad.t - pad.b;
 
@@ -52,8 +69,6 @@ export function drawChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
   // Fill the width quickly after load, then scroll through the last 3 minutes.
   const n = Math.max(60, samples.length);
 
-  ctx.font = '11px system-ui, sans-serif';
-  let legendX = pad.l;
   for (const series of SERIES) {
     const max = series.secondary ? maxSecondary : maxPrimary;
     ctx.strokeStyle = series.color;
@@ -67,13 +82,13 @@ export function drawChart(canvas: HTMLCanvasElement, samples: Sample[]): void {
       else ctx.lineTo(x, y);
     });
     ctx.stroke();
+  }
 
-    const last = samples.at(-1);
-    const text = `${series.label}: ${last ? series.format(series.value(last)) : '—'}`;
-    ctx.fillStyle = series.color;
-    ctx.fillRect(legendX, 7, 8, 8);
+  for (const item of legend) {
+    const y = item.row * 16;
+    ctx.fillStyle = item.series.color;
+    ctx.fillRect(item.x, 7 + y, 8, 8);
     ctx.fillStyle = labelColor;
-    ctx.fillText(text, legendX + 12, 15);
-    legendX += ctx.measureText(text).width + 24;
+    ctx.fillText(item.text, item.x + 12, 15 + y);
   }
 }

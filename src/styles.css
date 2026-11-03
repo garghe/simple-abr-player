@@ -198,6 +198,11 @@ code,
   word-break: break-all;
 }
 
+/* Wraps at spaces first, and inside a long word only when it can't fit. */
+.wrap {
+  overflow-wrap: anywhere;
+}
+
 .error {
   color: var(--danger);
 }

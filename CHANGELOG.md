@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Overview graph: the legend wraps onto a second line instead of being cut off in a narrow stats panel.
+- Device tab: Widevine security levels are listed one per line and long key-system names wrap, so the HDCP column is no longer pushed out of view.
+- DRM tab: the Details column wraps between words instead of splitting them.
+- README: removed outdated notes that DRM was still to come, and corrected the production branch and tab count.
+
 ## [1.0.0] - 2026-10-31
 
 First release.
