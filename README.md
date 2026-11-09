@@ -18,6 +18,7 @@
 - [Quick start](#quick-start)
 - [Playing HTTPS streams locally (CORS proxy)](#playing-https-streams-locally-cors-proxy)
 - [Build and run in production](#build-and-run-in-production)
+- [Run in a container (Docker)](#run-in-a-container-docker)
 - [Deploy to Cloudflare Workers](#deploy-to-cloudflare-workers)
 - [Dashboard](#dashboard)
 - [Welcome guide and tooltips](#welcome-guide-and-tooltips)
@@ -96,6 +97,8 @@ http://localhost:5173/?url=https://storage.googleapis.com/shaka-demo-assets/ange
 | `npm run dev` | Starts the development server on port 5173, with live reload and the CORS proxy. |
 | `npm run build` | Checks types, then builds the static site into `dist/`. |
 | `npm run preview` | Serves the production build on port 4173, with the CORS proxy. |
+| `npm run build:server` | Bundles the container's server into `dist-server/server.mjs` (see [Run in a container](#run-in-a-container-docker)). |
+| `npm start` | Runs that server: serves `dist/` on port 8080, with the CORS proxy if `PROXY_ENABLED=true`. |
 | `npm test` | Runs the unit tests (Vitest). |
 | `npm run typecheck` | Checks TypeScript types only. |
 | `npm run sample` | Regenerates the bundled SCTE-35 sample (needs `ffmpeg`). |
@@ -150,7 +153,43 @@ npm run build      # → dist/
 npm run preview    # serves dist/ on http://localhost:4173, with the CORS proxy
 ```
 
-`dist/` is a fully static site with relative paths (`base: './'`), so you can host it from any web server, bucket or sub-folder: GitHub Pages, S3 + CloudFront, nginx, and so on. A plain static host has no CORS proxy (see above). For a hosted version *with* the proxy, use Cloudflare Workers (next section).
+`dist/` is a fully static site with relative paths (`base: './'`), so you can host it from any web server, bucket or sub-folder: GitHub Pages, S3 + CloudFront, nginx, and so on. A plain static host has no CORS proxy (see above). For a hosted version *with* the proxy, run the container (next section) or use Cloudflare Workers.
+
+---
+
+## Run in a container (Docker)
+
+The image holds the built app and a small Node.js server (`server/container.ts`) that serves it and, if you turn it on, the same CORS proxy as the Cloudflare deployment, with the same settings. It needs nothing else: no `node_modules`, no database.
+
+```bash
+docker build -t playprobe .
+docker run --rm -p 8080:8080 playprobe                    # → http://localhost:8080
+
+# With the CORS proxy, limited to the hosts your streams come from:
+docker run --rm -p 8080:8080 \
+  -e PROXY_ENABLED=true -e PROXY_ALLOWED_HOSTS="*.akamaized.net,cdn.example.com" \
+  playprobe
+```
+
+Or with Docker Compose, using the settings in `compose.yaml`:
+
+```bash
+docker compose up --build -d                              # → http://localhost:8080
+```
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `8080` | Port the server listens on inside the container. |
+| `PROXY_ENABLED` | `false` | `true` turns on the CORS proxy at `/__proxy/`, for streams whose servers don't allow browser access. |
+| `PROXY_ALLOWED_HOSTS` | *(empty)* | Comma-separated hosts the proxy may fetch, `*.` for subdomains. **Empty means any host**: only leave it empty on a private network, or the container is an open proxy. |
+| `PROXY_SEGMENTS` | `false` | `true` also proxies video, audio and subtitle segments, not only manifests and playlists. Needed only if the segment server itself blocks CORS; every segment then goes through the container. |
+
+- **What it serves:** the app and the bundled sample streams, with correct types for `.mpd`, `.m3u8` and `.m4s`, byte ranges, long caching for the hashed build files, and `no-cache` for the page. Files outside the app are never served.
+- **Security:** runs as the unprivileged `node` user; the proxy is off by default; when on, it forwards only `GET`, `HEAD` and DRM licence `POST`s (up to the same size limit as the Worker) and refuses hosts outside `PROXY_ALLOWED_HOSTS`.
+- **Health:** the image has a Docker `HEALTHCHECK`; `/__proxy/health` reports whether the proxy is on (`{"status":"ok","kind":"server","segments":false}` or `{"status":"disabled"}`). It stops cleanly on `docker stop`.
+- **HTTPS:** the container speaks plain HTTP. Put it behind your usual TLS terminator (reverse proxy, load balancer, ingress): browsers only allow DRM (EME) on `https://` pages or `localhost`.
+- **Size:** about 260 MB, mostly the Node.js Alpine base image; the app with its sample streams is 16 MB.
+- **Without Docker:** `npm run build && npm run build:server && npm start` runs the same server from the repository (`PORT`, `PROXY_*` as above).
 
 ---
 
@@ -595,6 +634,7 @@ flowchart LR
 | `src/player/proxy.ts` | Converts URLs to and from their proxied form, and checks whether the proxy is available. |
 | `server/proxy-shared.ts` | Proxy rules shared by the local server and the Worker: URL mapping, which headers are passed through, CORS headers, redirect rewriting, host allowlist, segment detection and the `/health` capability format. |
 | `worker/index.ts` | Cloudflare Worker: serves the built site and, when `PROXY_ENABLED` is `true`, runs the CORS proxy (limited to `PROXY_ALLOWED_HOSTS`, and to manifests/playlists unless `PROXY_SEGMENTS` is `true`). |
+| `server/container.ts` | The Docker image's server: serves `dist/` (types, ranges, caching, no files outside it) and hands `/__proxy/` to the Worker's `handleProxy`, so the container and Cloudflare behave the same. |
 | `server/proxy-plugin.ts` | Adds the CORS proxy to the Vite dev and preview servers. Passes ranges, headers and redirects through, and follows the HTTPS proxy settings. |
 | `src/scte/scte35.ts` | SCTE-35 decoder, CRC check, summaries, and out/in and duration helpers. No dependencies; unit-tested against published sample messages. |
 | `src/scte/hls-cues.ts` | Finds ad-marker tags in HLS playlists and links each one to its segment, timestamp and position. |
@@ -663,12 +703,15 @@ sequenceDiagram
 ```
 ├── index.html                 Page layout (header, settings, player, stats panel)
 ├── vite.config.ts             Vite + CORS proxy plugin + Vitest config
+├── vite.server.config.ts      Bundles the container's server (dist-server/server.mjs)
+├── Dockerfile, compose.yaml   Container image and an example Compose file
 ├── wrangler.jsonc             Cloudflare Workers config (assets, proxy variables)
 ├── worker/
 │   └── index.ts               Cloudflare Worker: static site + optional CORS proxy
 ├── server/
-│   ├── proxy-shared.ts        Proxy logic shared by Vite plugin and Worker
-│   └── proxy-plugin.ts        Local CORS proxy (dev + preview)
+│   ├── proxy-shared.ts        Proxy logic shared by Vite plugin, Worker and container
+│   ├── proxy-plugin.ts        Local CORS proxy (dev + preview)
+│   └── container.ts           Server for the Docker image (static files + Worker proxy)
 ├── src/
 │   ├── main.ts                Connects everything: load, settings, overlay, export, share
 │   ├── player/                PlayerController (Shaka wrapper), proxy URL helpers

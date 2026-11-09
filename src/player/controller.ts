@@ -231,7 +231,7 @@ export class PlayerController extends EventTarget {
 
   proxyDescription(): string {
     if (!this.proxy) return 'no CORS proxy on this server';
-    const where = this.proxy.kind === 'cloudflare' ? 'Cloudflare CORS proxy' : 'local CORS proxy';
+    const where = this.proxy.kind === 'local' ? 'local CORS proxy' : "this site's CORS proxy";
     return this.proxy.segments
       ? `${where} available (manifests and segments)`
       : `${where} available for manifests/playlists only; segments always load directly`;

@@ -32,8 +32,8 @@ export function fromProxyUrl(url: string, origin = globalThis.location?.origin ?
 }
 
 export interface ProxyInfo {
-  /** 'local' = Vite dev/preview server, 'cloudflare' = deployed Worker. */
-  kind: 'local' | 'cloudflare';
+  /** 'local' = Vite dev/preview server, 'cloudflare' = deployed Worker, 'server' = Docker image. */
+  kind: 'local' | 'cloudflare' | 'server';
   /** Whether media segments may go through the proxy. */
   segments: boolean;
 }
@@ -47,7 +47,8 @@ export async function detectProxy(): Promise<ProxyInfo | null> {
     if (body === 'ok') return { kind: 'local', segments: true }; // older servers
     const json = JSON.parse(body) as { status?: string; kind?: string; segments?: boolean };
     if (json.status !== 'ok') return null;
-    return { kind: json.kind === 'cloudflare' ? 'cloudflare' : 'local', segments: json.segments === true };
+    const kind = json.kind === 'cloudflare' || json.kind === 'server' ? json.kind : 'local';
+    return { kind, segments: json.segments === true };
   } catch {
     return null;
   }

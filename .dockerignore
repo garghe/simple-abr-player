@@ -1,0 +1,12 @@
+# Only what the build needs goes into the image build context.
+.git
+node_modules
+dist
+dist-server
+docs
+test-results
+playwright-report
+.wrangler
+*.log
+.env*
+public/samples/_*

@@ -40,6 +40,8 @@ export interface Env {
   PROXY_ENABLED?: string;
   PROXY_ALLOWED_HOSTS?: string;
   PROXY_SEGMENTS?: string;
+  /** Reported by /health: 'cloudflare' (default) or 'server' (the Docker image). */
+  PROXY_KIND?: 'cloudflare' | 'server';
 }
 
 const text = (body: string, status: number, extra: Record<string, string> = {}) =>
@@ -58,7 +60,7 @@ export async function handleProxy(request: Request, env: Env): Promise<Response>
   if (url.pathname === `${PREFIX}health`) {
     // 200, not 404: the app asks on every visit, and a 404 shows as an error in the browser console.
     if (!enabled) return text(JSON.stringify({ status: 'disabled' }), 200, { 'Content-Type': 'application/json' });
-    const health: ProxyHealth = { status: 'ok', kind: 'cloudflare', segments };
+    const health: ProxyHealth = { status: 'ok', kind: env.PROXY_KIND ?? 'cloudflare', segments };
     return text(JSON.stringify(health), 200, { 'Content-Type': 'application/json' });
   }
   if (!enabled) return text('The CORS proxy is disabled on this deployment (PROXY_ENABLED is not "true").', 404);

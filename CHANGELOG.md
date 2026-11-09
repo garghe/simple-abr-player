@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Docker image**: `docker build -t playprobe .` and `docker run -p 8080:8080 playprobe`, or `docker compose up`. A small Node.js server serves the app and, with `PROXY_ENABLED=true`, the same CORS proxy as the Cloudflare deployment, with the same `PROXY_ALLOWED_HOSTS` and `PROXY_SEGMENTS` settings. Runs as a non-root user, with a health check. `npm run build:server && npm start` runs the same server without Docker.
+
+### Changed
+
+- The proxy is described as "this site's CORS proxy" on any hosted deployment (it said "Cloudflare" on all of them).
+
 ## [1.4.1] - 2026-11-03
 
 ### Added

@@ -1,0 +1,16 @@
+# docker compose up --build   →   http://localhost:8080
+services:
+  playprobe:
+    build: .
+    image: playprobe
+    ports:
+      - "8080:8080"
+    environment:
+      # Turn the CORS proxy on for streams whose servers don't allow browser access.
+      PROXY_ENABLED: "false"
+      # Hosts the proxy may fetch, comma-separated (e.g. "*.akamaized.net,cdn.example.com").
+      # Empty = any host: only on a private network.
+      PROXY_ALLOWED_HOSTS: ""
+      # "true" to also proxy video/audio segments, not just manifests and playlists.
+      PROXY_SEGMENTS: "false"
+    restart: unless-stopped
